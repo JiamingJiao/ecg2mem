@@ -18,6 +18,7 @@ class uNet(object):
 
 #    def loadData(self):
 
+    #Unet
     def netG(self):
         inputs = Input((self.imgRows, self.imgCols,1)) # single channel
 
