@@ -16,19 +16,6 @@ class netG(object):
         self.imgRows = imgRows
         self.imgCols = imgCols
 
-    def loadData(self):
-        data = dataProcess(self.imgRows, self.imgCols)
-        extraTrain = glob.glob('/mnt/recording/SimulationResults/mapping/train/extra/*.jpg')
-        extraVal = glob.glob('/mnt/recordings/SimulationResults/mapping/val/extra/*.jpg')
-        extraTrainMerge = np.ndarray((len(extraTrain), self.imgRows, self.imgCols), dtype=np.uint8)
-        memTrainMerge = np.ndarray((len(extraTrain), self.imgRows, self.imgCols), dtype=np.uint8)
-        for i in imgsTrain:
-            img = load_img('/mnt/recording/SimulationResults/mapping/train/extra/%04d'%i + '.jpg')
-            extraTrainMerge[i] = img_to_array(img)
-            img = load_img('/mnt/recording/SimulationResults/mapping/train/mem/%04d'%i + '.jpg')
-            memTrainMerge[i] = img_to_array(img)
-
-
     #Unet
     def uNet(self):
         inputs = Input((self.imgRows, self.imgCols,1)) # single channel
@@ -82,4 +69,20 @@ class netG(object):
         return model
 
     def train(self):
-        imgsTrain
+        # load data
+        data = dataProcess(self.imgRows, self.imgCols)
+        extraTrain = glob.glob('/mnt/recording/SimulationResults/mapping/2/train/extra/*.jpg')
+        extraTrainMerge = np.ndarray((len(extraTrain), self.imgRows, self.imgCols), dtype=np.uint8)
+        memTrainMerge = np.ndarray((len(extraTrain), self.imgRows, self.imgCols), dtype=np.uint8)
+        for i in imgsTrain:
+            img = load_img('/mnt/recording/SimulationResults/mapping/2/train/extra/%04d'%i + '.jpg')
+            extraTrainMerge[i] = img_to_array(img)
+            img = load_img('/mnt/recording/SimulationResults/mapping/2/train/mem/%04d'%i + '.jpg')
+            memTrainMerge[i] = img_to_array(img)
+        extraTrainMerge = extraTrainMerge.astype('float32')
+        extraTrainMerge /= 255
+        memTrainMerge = memTrainMerge.astype('float32')
+        memTrainMerge /= 255
+        # train model
+        model = self.uNet()
+        checkpoints = ModelCheckpoint('/mnt/recordins/SimulationResults/mapping/2/checkpoints')
