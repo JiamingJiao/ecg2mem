@@ -9,7 +9,6 @@ from keras.layers import Input, merge, Conv2D, MaxPooling2D, UpSampling2D, Dropo
 from keras.optimizers import *
 from keras.callbacks import ModelCheckpoint, LearningRateSchedule
 from keras import backend
-from data import *
 
 class netG(object):
     def __init__(self, imgRows = 200, imgCols = 200):
@@ -70,7 +69,6 @@ class netG(object):
 
     def train(self):
         # load data
-        data = dataProcess(self.imgRows, self.imgCols)
         extraTrain = glob.glob('/mnt/recording/SimulationResults/mapping/2/train/extra/*.jpg')
         extraTrainMerge = np.ndarray((len(extraTrain), self.imgRows, self.imgCols), dtype=np.uint8)
         memTrainMerge = np.ndarray((len(extraTrain), self.imgRows, self.imgCols), dtype=np.uint8)
