@@ -6,6 +6,7 @@ import cv2
 import os
 import glob
 import keras
+from keras.preprocessing.image import array_to_img, img_to_array, load_img
 from keras.models import *
 from keras.layers import Input, merge, Conv2D, MaxPooling2D, UpSampling2D, Dropout, Cropping2D
 from keras.optimizers import *
@@ -13,11 +14,12 @@ from keras.callbacks import ModelCheckpoint, LearningRateScheduler
 from keras import backend
 
 class netG(object):
-    def __init__(self, imgRows = 256, imgCols = 256, rawRows = 200, rawCols = 200):
+    def __init__(self, imgRows = 256, imgCols = 256, rawRows = 200, rawCols = 200, channel = 1):
         self.imgRows = imgRows
         self.imgCols = imgCols
         self.rawRows = rawRows
         self.rawCols = rawCols
+        self.channel = channel
 
     #Unet
     def uNet(self):
@@ -73,26 +75,33 @@ class netG(object):
 
     def train(self):
         # load data
-        extraTrain = glob.glob('/mnt/recording/SimulationResults/mapping/2/train/extra/*.jpg')
-        extraTrainMerge = np.ndarray((len(extraTrain), self.imgRows, self.imgCols), dtype=np.uint8)
-        memTrainMerge = np.ndarray((len(extraTrain), self.imgRows, self.imgCols), dtype=np.uint8)
-        rawImg = np.ndarray((self.rawRows, self.rawCols), dtype=np.uint8)
-        tempImg = np.ndarray((self.rawRows, self.rawCols), dtype=np.uint8)
-        print(extraTrain)
+        extraTrain = glob.glob('/mnt/recordings/SimulationResults/mapping/2/train/extra/*.jpg')
+        memTrain = glob.glob('/mnt/recordings/SimulationResults/mapping/2/train/extra/*.jpg')
+        extraTrainMerge = np.ndarray((len(extraTrain), self.imgRows, self.imgCols, self.channel), dtype=np.uint8)
+        memTrainMerge = np.ndarray((len(extraTrain), self.imgRows, self.imgCols, self.channel), dtype=np.uint8)
+        rawImg = np.ndarray((self.rawRows, self.rawCols, self.channel), dtype=np.uint8)
+        tempImg = np.ndarray((self.rawRows, self.rawCols, self.channel), dtype=np.uint8)
+        j = 0
         for i in extraTrain:
-            rawImg = load_img('/mnt/recording/SimulationResults/mapping/2/train/extra/%04d'%i + '.jpg')
+            #rawImg = load_img(i)
+            rawImg = cv2.imread(i,0)
             tempImg = cv2.resize(rawImg, (self.imgRows, self.imgCols))
-            extraTrainMerge[i] = img_to_array(tempImg)
-            rawImg = load_img('/mnt/recording/SimulationResults/mapping/2/train/mem/%04d'%i + '.jpg')
-            tempImg = cv2.resize(rawImg, (self.imgRows, self.imgCols))
-            memTrainMerge[i] = img_to_array(tempImg)
+            extraTrainMerge[j] = img_to_array(tempImg)
+            j += 1
         extraTrainMerge = extraTrainMerge.astype('float32')
         extraTrainMerge /= 255
+        j = 0
+        for i in memTrain:
+            #rawImg = load_img(i)
+            rawImg = cv2.imread(i,0)
+            tempImg = cv2.resize(rawImg, (self.imgRows, self.imgCols))
+            memTrainMerge[j] = img_to_array(tempImg)
+            j += 1
         memTrainMerge = memTrainMerge.astype('float32')
         memTrainMerge /= 255
         # train model
         model = self.uNet()
-        checkpoints = ModelCheckpoint('/mnt/recordins/SimulationResults/mapping/2/checkpoints', monitor = 'loss', verbose = 1,
+        checkpoints = ModelCheckpoint('/mnt/recordings/SimulationResults/mapping/2/checkpoints', monitor = 'loss', verbose = 1,
         save_best_only = False, save_weights_only = False, mode = 'auto', period = 20)
         model.fit(extraTrainMerge, memTrainMerge, batch_size = 10, epochs = 200, verbose = 2, validation_split = 0.2, shuffle = True,
         callbacks=[checkpoints])
