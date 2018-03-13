@@ -85,4 +85,10 @@ class netG(object):
         memTrainMerge /= 255
         # train model
         model = self.uNet()
-        checkpoints = ModelCheckpoint('/mnt/recordins/SimulationResults/mapping/2/checkpoints')
+        checkpoints = ModelCheckpoint('/mnt/recordins/SimulationResults/mapping/2/checkpoints', monitor = 'loss', verbose = 1,
+        save_best_only = False, save_weights_only = False, mode = 'auto', period = 20)
+        model.fit(extraTrainMerge, memTrainMerge, batch_size = 10, epoch = 200, verbose = 0, validation_split = 0.2, Shuffle = True,
+        callbacks=[model_checkpoint])
+
+network = netG()
+network.train()
