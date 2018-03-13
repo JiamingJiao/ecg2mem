@@ -11,15 +11,26 @@ from keras.callbacks import ModelCheckpoint, LearningRateSchedule
 from keras import backend
 from data import *
 
-class uNet(object):
+class netG(object):
     def __init__(self, imgRows = 200, imgCols = 200):
         self.imgRows = imgRows
         self.imgCols = imgCols
 
-#    def loadData(self):
+    def loadData(self):
+        data = dataProcess(self.imgRows, self.imgCols)
+        extraTrain = glob.glob('/mnt/recording/SimulationResults/mapping/train/extra/*.jpg')
+        extraVal = glob.glob('/mnt/recordings/SimulationResults/mapping/val/extra/*.jpg')
+        extraTrainMerge = np.ndarray((len(extraTrain), self.imgRows, self.imgCols), dtype=np.uint8)
+        memTrainMerge = np.ndarray((len(extraTrain), self.imgRows, self.imgCols), dtype=np.uint8)
+        for i in imgsTrain:
+            img = load_img('/mnt/recording/SimulationResults/mapping/train/extra/%04d'%i + '.jpg')
+            extraTrainMerge[i] = img_to_array(img)
+            img = load_img('/mnt/recording/SimulationResults/mapping/train/mem/%04d'%i + '.jpg')
+            memTrainMerge[i] = img_to_array(img)
+
 
     #Unet
-    def netG(self):
+    def uNet(self):
         inputs = Input((self.imgRows, self.imgCols,1)) # single channel
 
         conv1_1 = Conv2D(64, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(inputs)
@@ -71,3 +82,4 @@ class uNet(object):
         return model
 
     def train(self):
+        imgsTrain
