@@ -87,7 +87,7 @@ class netG(object):
             rawImg = cv2.imread(i,0)
             tempImg = cv2.resize(rawImg, (self.imgRows, self.imgCols))
             extraTrainMerge[j] = img_to_array(tempImg)
-            j += 1
+            j = j + 1
         extraTrainMerge = extraTrainMerge.astype('float32')
         extraTrainMerge /= 255
         j = 0
@@ -96,7 +96,7 @@ class netG(object):
             rawImg = cv2.imread(i,0)
             tempImg = cv2.resize(rawImg, (self.imgRows, self.imgCols))
             memTrainMerge[j] = img_to_array(tempImg)
-            j += 1
+            j = j + 1
         memTrainMerge = memTrainMerge.astype('float32')
         memTrainMerge /= 255
         # train model
