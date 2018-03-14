@@ -67,7 +67,7 @@ class netG(object):
         conv9_2 = Conv2D(64, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv9_1)
         conv9_3 = Conv2D(2, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv9_2)
 
-        conv10 = Conv2D(1, 1, activation = 'sigmoid')(conv9_3)
+        conv10 = Conv2D(1, 1)(conv9_3)
 
         model = Model(input = inputs, output = conv10)
         model.compile(optimizer = Adam(lr = 1e-4), loss = 'mean_absolute_percentage_error', metrics = ['accuracy'])
