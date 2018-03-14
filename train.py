@@ -67,16 +67,16 @@ class netG(object):
         conv9_2 = Conv2D(64, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv9_1)
         conv9_3 = Conv2D(2, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv9_2)
 
-        conv10 = Conv2D(1, 1, activation = 'sigmoid')(conv9_3)
+        #conv10 = Conv2D(1, 1, activation = 'sigmoid')(conv9_3)
 
-        model = Model(input = inputs, output = conv10)
-        model.compile(optimizer = Adam(lr = 1e-4), loss = 'binary_crossentropy', metrics = ['accuracy'])
+        model = Model(input = inputs, output = conv9_3)
+        model.compile(optimizer = Adam(lr = 1e-4), loss = 'mean_absolute_percentage_error', metrics = ['accuracy'])
         return model
 
     def train(self):
         # load data
         extraTrain = glob.glob('/mnt/recordings/SimulationResults/mapping/2/train/extra/*.jpg')
-        memTrain = glob.glob('/mnt/recordings/SimulationResults/mapping/2/train/extra/*.jpg')
+        memTrain = glob.glob('/mnt/recordings/SimulationResults/mapping/2/train/mem/*.jpg')
         extraTrainMerge = np.ndarray((len(extraTrain), self.imgRows, self.imgCols, self.channel), dtype=np.uint8)
         memTrainMerge = np.ndarray((len(extraTrain), self.imgRows, self.imgCols, self.channel), dtype=np.uint8)
         rawImg = np.ndarray((self.rawRows, self.rawCols, self.channel), dtype=np.uint8)
@@ -101,7 +101,7 @@ class netG(object):
         memTrainMerge /= 255
         # train model
         model = self.uNet()
-        checkpoints = ModelCheckpoint('/mnt/recordings/SimulationResults/mapping/2/checkpoints', monitor = 'loss', verbose = 1,
+        checkpoints = ModelCheckpoint('/mnt/recordings/SimulationResults/mapping/2/checkpoints/20180314.hdf5', monitor = 'loss', verbose = 1,
         save_best_only = False, save_weights_only = False, mode = 'auto', period = 20)
         model.fit(extraTrainMerge, memTrainMerge, batch_size = 10, epochs = 200, verbose = 2, validation_split = 0.2, shuffle = True,
         callbacks=[checkpoints])
