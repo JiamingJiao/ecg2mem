@@ -67,9 +67,9 @@ class netG(object):
         conv9_2 = Conv2D(64, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv9_1)
         conv9_3 = Conv2D(2, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv9_2)
 
-        #conv10 = Conv2D(1, 1, activation = 'sigmoid')(conv9_3)
+        conv10 = Conv2D(1, 1, activation = 'sigmoid')(conv9_3)
 
-        model = Model(input = inputs, output = conv9_3)
+        model = Model(input = inputs, output = conv10)
         model.compile(optimizer = Adam(lr = 1e-4), loss = 'mean_absolute_percentage_error', metrics = ['accuracy'])
         return model
 
@@ -78,7 +78,7 @@ class netG(object):
         extraTrain = glob.glob('/mnt/recordings/SimulationResults/mapping/2/train/extra/*.jpg')
         memTrain = glob.glob('/mnt/recordings/SimulationResults/mapping/2/train/mem/*.jpg')
         extraTrainMerge = np.ndarray((len(extraTrain), self.imgRows, self.imgCols, self.channel), dtype=np.uint8)
-        memTrainMerge = np.ndarray((len(extraTrain), self.imgRows, self.imgCols, self.channel), dtype=np.uint8)
+        memTrainMerge = np.ndarray((len(memTrain), self.imgRows, self.imgCols, self.channel), dtype=np.uint8)
         rawImg = np.ndarray((self.rawRows, self.rawCols, self.channel), dtype=np.uint8)
         tempImg = np.ndarray((self.rawRows, self.rawCols, self.channel), dtype=np.uint8)
         j = 0
@@ -87,7 +87,7 @@ class netG(object):
             rawImg = cv2.imread(i,0)
             tempImg = cv2.resize(rawImg, (self.imgRows, self.imgCols))
             extraTrainMerge[j] = img_to_array(tempImg)
-            j = j + 1
+            j += 1
         extraTrainMerge = extraTrainMerge.astype('float32')
         extraTrainMerge /= 255
         j = 0
@@ -96,7 +96,7 @@ class netG(object):
             rawImg = cv2.imread(i,0)
             tempImg = cv2.resize(rawImg, (self.imgRows, self.imgCols))
             memTrainMerge[j] = img_to_array(tempImg)
-            j = j + 1
+            j += 1
         memTrainMerge = memTrainMerge.astype('float32')
         memTrainMerge /= 255
         # train model
