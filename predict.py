@@ -29,6 +29,9 @@ extraTestMerge /= 255
 #mode = net.uNet
 model = load_model('/mnt/recordings/SimulationResults/mapping/2/checkpoints/20180314.hdf5')
 resultArray = model.predict(extraTestMerge, verbose = 0, batch_size = 10)
+print(resultArray)
+resultArray *= 255
+resultArray =resultArray.astype('uint8')
 
 for j in range(0, len(extraTest)):
     rawSizeImg = cv2.resize(resultArray[j], (rawRows, rawCols))
