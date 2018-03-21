@@ -85,12 +85,21 @@ class netG(object):
         inputs = Input((self.imgRows, self.imgCols,1))
         conv1 = Conv2D(dKernels, 1, padding = 'same', kernel_initializer = 'he_normal')
         conv1 = LeakyReLU(alpha = 0.2)(conv1)
+        conv2 = Conv2D(dKernels*2, 1, padding = 'same', kernel_initializer = 'he_normal')
+        conv2 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(conv2)
+        conv2 = LeakyReLU(alpha = 0.2)(conv2)
+        conv3 = Conv2D(1, 1, padding = 'same', kernel_initializer = 'he_normal')(conv2)
+        conv4 = Conv2D(1, 1, activation = 'sigmoid')(conv3)
 
+        model = Model(input = inputs, output = conv4)
+        model.compile(optimizer = Adam(lr = 1e-4), )
 
-    def train(self):
+    def train(self, extraPath, memPath, modelPath):
         # load data
-        extraTrain = glob.glob('/mnt/recordings/SimulationResults/mapping/2/train/extra/*.jpg')
-        memTrain = glob.glob('/mnt/recordings/SimulationResults/mapping/2/train/mem/*.jpg')
+        #extraTrain = glob.glob('/mnt/recordings/SimulationResults/mapping/2/train/extra/*.jpg')
+        #memTrain = glob.glob('/mnt/recordings/SimulationResults/mapping/2/train/mem/*.jpg')
+        extraTrain = glob.glob(extraPath)
+        memTrain = glob.glob(memPath)
         extraTrainMerge = np.ndarray((len(extraTrain), self.imgRows, self.imgCols, self.channels), dtype=np.uint8)
         memTrainMerge = np.ndarray((len(memTrain), self.imgRows, self.imgCols, self.channels), dtype=np.uint8)
         rawImg = np.ndarray((self.rawRows, self.rawCols, self.channels), dtype=np.uint8)
@@ -115,7 +124,8 @@ class netG(object):
         memTrainMerge /= 255
         # train model
         model = self.uNet()
-        checkpoints = ModelCheckpoint('/mnt/recordings/SimulationResults/mapping/2/checkpoints/20180314.hdf5', monitor = 'loss', verbose = 2,
-        save_best_only = True, save_weights_only = True, mode = 'auto', period = 20)
+        #checkpoints = ModelCheckpoint('/mnt/recordings/SimulationResults/mapping/2/checkpoints/20180314.hdf5', monitor = 'loss', verbose = 2,
+        #save_best_only = True, save_weights_only = True, mode = 'auto', period = 20)
+        checkpoints = ModelCheckpoint(modelPath, monitor = 'loss', verbose = 2, save_best_only = True, save_weights_only = True, mode = 'auto', period = 20)
         model.fit(extraTrainMerge, memTrainMerge, batch_size = 10, epochs = 100, verbose = 2, validation_split = 0.4, shuffle = True,
         callbacks=[checkpoints])
