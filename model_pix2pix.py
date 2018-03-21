@@ -36,33 +36,31 @@ class netG(object):
         encoder7 = Conv2D(self.kernels*8, 4, activation = LeakyReLU(alpha = 0.2), strides = 2, padding = 'same', kernel_initializer = 'he_normal')(encoder6)
         encoder8 = Conv2D(self.kernels*8, 4, activation = LeakyReLU(alpha = 0.2), strides = 2, padding = 'same', kernel_initializer = 'he_normal')(encoder7)
 
-        decoder1 = Conv2D(self.kernels*8, 4, activation = 'relu', dilation_rate = 2, padding = 'same', kernel_initializer = 'he_normal')(encoder8)
+        decoder1 = Conv2D(self.kernels*8, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(encoder8))
         merge1 = merge([decoder1, encoder7], mode = 'concat', concat_axis = 3)
-        decoder2 = Conv2D(self.kernels*8, 4, activation = 'relu', dilation_rate = 2, padding = 'same', kernel_initializer = 'he_normal')(merge1)
+        decoder2 = Conv2D(self.kernels*8, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(merge1))
         merge2 = merge([decoder2, encoder6], mode = 'concat', concat_axis = 3)
-        decoder3 = Conv2D(self.kernels*8, 4, activation = 'relu', dilation_rate = 2, padding = 'same', kernel_initializer = 'he_normal')(merge2)
+        decoder3 = Conv2D(self.kernels*8, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(merge2))
         merge3 = merge([decoder3, encoder5], mode = 'concat', concat_axis = 3)
-        decoder4 = Conv2D(self.kernels*8, 4, activation = 'relu', dilation_rate = 2, padding = 'same', kernel_initializer = 'he_normal')(merge3)
+        decoder4 = Conv2D(self.kernels*8, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(merge3))
         merge4 = merge([decoder4, encoder4], mode = 'concat', concat_axis = 3)
-        decoder5 = Conv2D(self.kernels*8, 4, activation = 'relu', dilation_rate = 2, padding = 'same', kernel_initializer = 'he_normal')(merge4)
+        decoder5 = Conv2D(self.kernels*8, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(merge4))
         merge5 = merge([decoder5, encoder3], mode = 'concat', concat_axis = 3)
-        decoder6 = Conv2D(self.kernels*4, 4, activation = 'relu', dilation_rate = 2, padding = 'same', kernel_initializer = 'he_normal')(merge5)
+        decoder6 = Conv2D(self.kernels*4, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(merge5))
         merge6 = merge([decoder6, encoder2], mode = 'concat', concat_axis = 3)
-        decoder7 = Conv2D(self.kernels*2, 4, activation = 'relu', dilation_rate = 2, padding = 'same', kernel_initializer = 'he_normal')(merge6)
+        decoder7 = Conv2D(self.kernels*2, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(merge6))
         merge7 = merge([decoder7, encoder1], mode = 'concat', concat_axis = 3)
-        decoder8 = Conv2D(self.kernels, 4, activation = 'relu', dilation_rate = 2, padding = 'same', kernel_initializer = 'he_normal')(merge7)
+        decoder8 = Conv2D(self.kernels, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(merge7))
         decoder9 = Conv2D(1, 1, activation = 'tanh')(decoder8)
 
         model = Model(input = inputs, output = decoder9)
         model.compile(optimizer = Adam(lr = 1e-4), loss = 'mean_absolute_percentage_error', metrics = ['accuracy'])
         return model
 
-    def train(self, extraPath, memPath, savePath):
+    def train(self):
         # load data
-        #extraTrain = glob.glob('/mnt/recordings/SimulationResults/mapping/2/train/extra/*.jpg')
-        #memTrain = glob.glob('/mnt/recordings/SimulationResults/mapping/2/train/mem/*.jpg')
-        extraTrain = glob.glob(extraPath)
-        memTrain = glob.glob(memTrain)
+        extraTrain = glob.glob('/mnt/recordings/SimulationResults/mapping/2/train/extra/*.jpg')
+        memTrain = glob.glob('/mnt/recordings/SimulationResults/mapping/2/train/mem/*.jpg')
         extraTrainMerge = np.ndarray((len(extraTrain), self.imgRows, self.imgCols, self.channel), dtype=np.uint8)
         memTrainMerge = np.ndarray((len(memTrain), self.imgRows, self.imgCols, self.channel), dtype=np.uint8)
         rawImg = np.ndarray((self.rawRows, self.rawCols, self.channel), dtype=np.uint8)
@@ -87,8 +85,7 @@ class netG(object):
         memTrainMerge /= 255
         # train model
         model = self.uNet()
-        #checkpoints = ModelCheckpoint('/mnt/recordings/SimulationResults/mapping/2/checkpoints/20180314.hdf5', monitor = 'loss', verbose = 2,
-        #save_best_only = True, save_weights_only = False, mode = 'auto', period = 20)
-        checkpoints = ModelCheckpoint(savePath, monitor = 'val_loss', mode = 'min', verbose = 2, save_best_only = True, save_weights_only = False, mode = 'auto', period = 1)
-        model.fit(extraTrainMerge, memTrainMerge, batch_size = 10, epochs = 100, verbose = 2, validation_split = 0.2, shuffle = True,
+        checkpoints = ModelCheckpoint('/mnt/recordings/SimulationResults/mapping/2/checkpoints/20180314.hdf5', monitor = 'loss', verbose = 2,
+        save_best_only = True, save_weights_only = False, mode = 'auto', period = 20)
+        model.fit(extraTrainMerge, memTrainMerge, batch_size = 10, epochs = 100, verbose = 2, validation_split = 0.4, shuffle = True,
         callbacks=[checkpoints])
