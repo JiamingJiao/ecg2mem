@@ -171,15 +171,15 @@ class GAN(object):
 
         for m in range(epochsNum):
             for n in range(0, len(memRealMerge), batchSize):
-                extraForFakeLocal = extraForFakeMerge[n*batchSize:(n+1)*batchSize, :]
-                memRealLocal = memRealMerge[n*batchSize:(n+1)*batchSize, :]
+                extraForFakeLocal = extraForFakeMerge[n*batchSize:(n+1)*batchSize-1, :]
+                memRealLocal = memRealMerge[n*batchSize:(n+1)*batchSize-1, :]
                 memFake = netG.predict_on_batch(extraForFakeLocal)
                 realFake = np.concatenate((memRealLocal,memFake), axis = 0)
                 labelD = np.zeros((len(realFake), 1), dtype = np.uint8)
-                labelD[0:batchSize, :] = 1
+                labelD[0:batchSize-1, :] = 1
                 lossD = netD.train_on_batch(realFake, labelD)
                 netD.trainable = False
-                extraLocal = extraTrainMerge[n*batchSize:(n+1)*batchSize, :]
+                extraLocal = extraTrainMerge[n*batchSize:(n+1)*batchSize-1, :]
                 labelA = np.ones((len(extraLocal),1), dtype = np.uint8)
                 lossA = netA.train_on_batch(extraLocal, [memRealLocal, labelA])
                 netD.trainable = True
