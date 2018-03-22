@@ -96,10 +96,10 @@ class networks(object):
         #model.compile(optimizer = Adam(lr = 1e-4), loss = 'binary_crossentropy', metrics = ['accuracy'])
         return model
 
-    def netA(self, netG, netD, imgRows, imgCols):
+    def netA(self):
         inputs = Input((self.imgRows, self.imgCols,1))
-        fake = netG(inputs)
-        outputD = netD(fake)
+        fake = self.uNet(inputs)
+        outputD = self.netD(fake)
         netA = Model(input = [inputs], output = [fake, outputD], name = 'netA')
         return netA
 
@@ -111,9 +111,11 @@ class GAN(object):
         self.rawCols = rawCols
         self.channels = channels
 
-    def trainGAN(self, extraPath, memPath, extraForFakePath, memRealPath, modelPath,
-                netA = network.netA, netG = networks.netG, netD = networks.netD,
-                epochsNum = 200, batchSize = 10, valSplit = 0.2, checkPeriod = 10):
+    def trainGAN(self, extraPath, memPath, extraForFakePath, memRealPath, modelPath, epochsNum = 200, batchSize = 10, valSplit = 0.2, checkPeriod = 10):
+        network = networks()
+        netG = network.uNet()
+        netD = network.netD()
+        netA = network.netA()
         netG.compile(optimizer = Adam(lr = 1e-4), loss = 'mae', metrics = ['accuracy'])
         netD.trainable = True
         netD.compile(optimizer = Adam(lr = 1e-4), loss = 'binary_crossentropy', metrics = ['accuracy'])
