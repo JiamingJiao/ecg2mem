@@ -8,7 +8,7 @@ import glob
 import keras
 from keras.preprocessing.image import array_to_img, img_to_array, load_img
 from keras.models import *
-from keras.layers import Input, merge, Conv2D, UpSampling2D, Dropout, BatchNormalization
+from keras.layers import Input, merge, Conv2D, UpSampling2D, Dropout, BatchNormalization, Flatten, Dense
 from keras.optimizers import *
 from keras.callbacks import ModelCheckpoint, LearningRateScheduler
 from keras import backend
@@ -83,23 +83,23 @@ class networks(object):
 
     def netD(self):
         inputs = Input((self.imgRows, self.imgCols,1))
-        conv1 = Conv2D(dKernels, 1, padding = 'same', kernel_initializer = 'he_normal')
+        conv1 = Conv2D(self.dKernels, 1, padding = 'same', kernel_initializer = 'he_normal')(inputs)
         conv1 = LeakyReLU(alpha = 0.2)(conv1)
-        conv2 = Conv2D(dKernels*2, 1, padding = 'same', kernel_initializer = 'he_normal')
+        conv2 = Conv2D(self.dKernels*2, 1, padding = 'same', kernel_initializer = 'he_normal')(conv1)
         conv2 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(conv2)
         conv2 = LeakyReLU(alpha = 0.2)(conv2)
         conv3 = Conv2D(1, 1, padding = 'same', kernel_initializer = 'he_normal')(conv2)
         conv4 = Conv2D(1, 1, activation = 'sigmoid')(conv3)
         flat = Flatten()(conv4)
         probability = Dense(1, activation = 'softmax')(flat)
-        model = Model(input = inputs, output = conv4, name='netD')
+        model = Model(input = inputs, output = probability, name='netD')
         #model.compile(optimizer = Adam(lr = 1e-4), loss = 'binary_crossentropy', metrics = ['accuracy'])
         return model
 
     def netA(self):
         inputs = Input((self.imgRows, self.imgCols,1))
-        fake = self.uNet(inputs)
-        outputD = self.netD(fake)
+        fake = self.uNet()(inputs)
+        outputD = self.netD()(fake)
         netA = Model(input = [inputs], output = [fake, outputD], name = 'netA')
         return netA
 
@@ -111,7 +111,7 @@ class GAN(object):
         self.rawCols = rawCols
         self.channels = channels
 
-    def trainGAN(self, extraPath, memPath, extraForFakePath, memRealPath, modelPath, epochsNum = 200, batchSize = 10, valSplit = 0.2, checkPeriod = 10):
+    def trainGAN(self, extraPath, memPath, extraForFakePath, memRealPath, modelPath, epochsNum = 100, batchSize = 10, valSplit = 0.2, checkPeriod = 10):
         network = networks()
         netG = network.uNet()
         netD = network.netD()
@@ -174,7 +174,7 @@ class GAN(object):
                 extraForFakeLocal = extraForFakeMerge[n*batchSize:(n+1)*batchSize, :]
                 memRealLocal = memRealMerge[n*batchSize:(n+1)*batchSize, :]
                 memFake = netG.predict_on_batch(extraForFakeLocal)
-                realFake = np.cincatenate(memRealLocal,memFake)
+                realFake = np.concatenate((memRealLocal,memFake), axis = 0)
                 labelD = np.zeros((len(realFake), 1), dtype = np.uint8)
                 labelD[0:batchSize, :] = 1
                 lossD = netD.train_on_batch(realFake, labelD)
