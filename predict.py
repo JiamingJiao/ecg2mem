@@ -6,7 +6,7 @@ import cv2
 import keras
 from keras.preprocessing.image import array_to_img, img_to_array
 #from keras.models import *
-from model_pix2pix import *
+from model import *
 
 rawRows = 200
 rawCols = 200

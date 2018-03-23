@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from model_pix2pix import *
+from model import *
 
 network = GAN()
 network.trainGAN(extraPath = '/mnt/recordings/SimulationResults/mapping/2/train/extra/*.jpg',
