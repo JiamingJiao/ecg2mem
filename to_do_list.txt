@@ -1,3 +1,4 @@
+Are the input extra of netA and extraForFake the same?
 visualize loss
 validation loss
 accuracy evaluation
