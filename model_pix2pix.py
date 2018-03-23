@@ -191,6 +191,7 @@ class GAN(object):
             netD.save_weights(weightsNetDPath, overwrite = True)
             weightsNetAPath = modelPath + 'netA_epoch_%d'%m + '.h5'
             netA.save_weights(weightsNetAPath, overwrite = True)
+        print('training finished')
 
     def trainUNet(self, extraPath, memPath, modelPath):
         extraTrain = glob.glob(extraPath)
@@ -221,6 +222,6 @@ class GAN(object):
         model = self.uNet()
         #checkpoints = ModelCheckpoint('/mnt/recordings/SimulationResults/mapping/2/checkpoints/20180314.hdf5', monitor = 'loss', verbose = 2,
         #save_best_only = True, save_weights_only = True, mode = 'auto', period = 20)
-        checkpoints = ModelCheckpoint(modelPath, monitor = 'loss', verbose = 2, save_best_only = True, save_weights_only = True, mode = 'auto', period = 20)
+        checkpoints = ModelCheckpoint(modelPath, monitor = 'loss', verbose = 2, save_best_only = True, save_weights_only = False, mode = 'auto', period = 20)
         model.fit(extraTrainMerge, memTrainMerge, batch_size = 10, epochs = 100, verbose = 2, validation_split = 0.4, shuffle = True,
         callbacks=[checkpoints])
