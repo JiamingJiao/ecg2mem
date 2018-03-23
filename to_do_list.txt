@@ -1,0 +1,4 @@
+visualize loss
+validation loss
+accuracy evaluation
+data loading&processing function
