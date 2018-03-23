@@ -75,7 +75,7 @@ class networks(object):
         decoder7 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(decoder7)
         merge7 = merge([decoder7, encoder1], mode = 'concat', concat_axis = -1)
         decoder8 = Conv2D(self.gKernels, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(merge7))
-        decoder9 = Conv2D(1, 1, activation = 'tanh')(decoder8)
+        decoder9 = Conv2D(1, 1, activation = 'sigmoid')(decoder8)
 
         model = Model(input = inputs, output = decoder9, name = 'uNet')
         #model.compile(optimizer = Adam(lr = 1e-4), loss = 'mean_absolute_percentage_error', metrics = ['accuracy'])
