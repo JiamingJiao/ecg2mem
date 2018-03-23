@@ -112,15 +112,15 @@ class GAN(object):
         self.channels = channels
 
     def trainGAN(self, extraPath, memPath, extraForFakePath, memRealPath, modelPath, epochsNum = 100, batchSize = 10, valSplit = 0.2, checkPeriod = 10,
-    lossG = 'mae', lossD = 'binary_crossentropy', lossRatio = 10):
+    lossFuncG = 'mae', lossFuncD = 'binary_crossentropy', lossFuncA1 = 'mae', lossFuncA2 = 'binary_crossentropy', lossRatio = 10):
         network = networks()
         netG = network.uNet()
         netD = network.netD()
         netA = network.netA()
-        netG.compile(optimizer = Adam(lr = 1e-4), loss = lossG, metrics = ['accuracy'])
+        netG.compile(optimizer = Adam(lr = 1e-4), loss = lossFuncG, metrics = ['accuracy'])
         netD.trainable = True
-        netD.compile(optimizer = Adam(lr = 1e-4), loss = lossD, metrics = ['accuracy'])
-        netA.compile(optimizer = Adam(lr = 1e-4), loss = [lossG, lossD], loss_weights = [lossRatio, 1], metrics = ['accuracy'])
+        netD.compile(optimizer = Adam(lr = 1e-4), loss = lossFuncD, metrics = ['accuracy'])
+        netA.compile(optimizer = Adam(lr = 1e-4), loss = [lossFuncA1, lossFuncA2], loss_weights = [lossRatio, 1], metrics = ['accuracy'])
 
         extraTrain = glob.glob(extraPath)
         memTrain = glob.glob(memPath)
@@ -172,16 +172,18 @@ class GAN(object):
 
         for m in range(epochsNum):
             for n in range(0, len(memRealMerge), batchSize):
+                extraLocal = extraTrainMerge[n:n+batchSize, :]
+                memLocal = memTrainMerge[n:n+batchSize, :]
                 extraForFakeLocal = extraForFakeMerge[n:n+batchSize, :]
                 memRealLocal = memRealMerge[n:n+batchSize, :]
+                lossG = netG.train_on_batch(extraLocal, memLocal)
                 memFake = netG.predict_on_batch(extraForFakeLocal)
                 realFake = np.concatenate((memRealLocal,memFake), axis = 0)
-                labelD = np.zeros((len(realFake), 1), dtype = np.uint8)
+                labelD = np.zeros((batchSize*2, 1), dtype = np.uint8)
                 labelD[0:batchSize, :] = 1
                 lossD = netD.train_on_batch(realFake, labelD)
-                netD.trainable = False
-                extraLocal = extraTrainMerge[n:n+batchSize, :]
-                labelA = np.ones((len(extraLocal),1), dtype = np.uint8)
+                netD.trainable = False                
+                labelA = np.ones((batchSize,1), dtype = np.uint8) #to fool the netD
                 lossA = netA.train_on_batch(extraForFakeLocal, [memRealLocal, labelA])
                 netD.trainable = True
                 msg = 'epoch of ' + '%d'%m + ' batch of ' + '%d'%(n/batchSize)
