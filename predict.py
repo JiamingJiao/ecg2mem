@@ -27,7 +27,7 @@ extraTestMerge /= 255
 print('data loaded')
 network = networks()
 model = network.uNet()
-model.load_weights('/mnt/recordings/SimulationResults/mapping/2/checkpoints/20180322/netG_epoch_99.h5')
+model.load_weights('/mnt/recordings/SimulationResults/mapping/2/checkpoints/20180323/netG_epoch_49.h5')
 print('model loaded')
 resultArray = model.predict(extraTestMerge, verbose = 0, batch_size = 10)
 #maxPix = np.max(resultArray)
@@ -40,6 +40,6 @@ resultArray =resultArray.astype('uint8')
 
 for j in range(0, len(extraTest)):
     rawSizeImg = cv2.resize(resultArray[j], (rawRows, rawCols))
-    dstFileName = '/mnt/recordings/SimulationResults/mapping/2/test/dst/mem/' + '%04d'%j + '.jpg'
+    dstFileName = '/mnt/recordings/SimulationResults/mapping/2/test/dst/mem/20180323/' + '%04d'%j + '.jpg'
     cv2.imwrite(dstFileName, rawSizeImg)
 print('finished')

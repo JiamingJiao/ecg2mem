@@ -111,15 +111,16 @@ class GAN(object):
         self.rawCols = rawCols
         self.channels = channels
 
-    def trainGAN(self, extraPath, memPath, extraForFakePath, memRealPath, modelPath, epochsNum = 100, batchSize = 10, valSplit = 0.2, checkPeriod = 10):
+    def trainGAN(self, extraPath, memPath, extraForFakePath, memRealPath, modelPath, epochsNum = 100, batchSize = 10, valSplit = 0.2, checkPeriod = 10,
+    lossG = 'mae', lossD = 'binary_crossentropy', lossRatio = 10):
         network = networks()
         netG = network.uNet()
         netD = network.netD()
         netA = network.netA()
-        netG.compile(optimizer = Adam(lr = 1e-4), loss = 'mae', metrics = ['accuracy'])
+        netG.compile(optimizer = Adam(lr = 1e-4), loss = lossG, metrics = ['accuracy'])
         netD.trainable = True
-        netD.compile(optimizer = Adam(lr = 1e-4), loss = 'binary_crossentropy', metrics = ['accuracy'])
-        netA.compile(optimizer = Adam(lr = 1e-4), loss = ['mae', 'binary_crossentropy'], loss_weights = [100, 1], metrics = ['accuracy'])
+        netD.compile(optimizer = Adam(lr = 1e-4), loss = lossD, metrics = ['accuracy'])
+        netA.compile(optimizer = Adam(lr = 1e-4), loss = [lossG, lossD], loss_weights = [lossRatio, 1], metrics = ['accuracy'])
 
         extraTrain = glob.glob(extraPath)
         memTrain = glob.glob(memPath)
@@ -181,7 +182,7 @@ class GAN(object):
                 netD.trainable = False
                 extraLocal = extraTrainMerge[n:n+batchSize, :]
                 labelA = np.ones((len(extraLocal),1), dtype = np.uint8)
-                lossA = netA.train_on_batch(extraLocal, [memRealLocal, labelA])
+                lossA = netA.train_on_batch(extraForFakeLocal, [memRealLocal, labelA])
                 netD.trainable = True
                 msg = 'epoch of ' + '%d'%m + ' batch of ' + '%d'%(n/batchSize)
                 print(msg)
