@@ -99,6 +99,7 @@ class networks(object):
     def netA(self):
         inputs = Input((self.imgRows, self.imgCols,1))
         fake = self.uNet()(inputs)
+        #realFake = merge([inputs, fake], mode = 'concat', concat_axis = 1)
         outputD = self.netD()(fake)
         netA = Model(input = [inputs], output = [fake, outputD], name = 'netA')
         return netA
@@ -176,7 +177,7 @@ class GAN(object):
                 memLocal = memTrainMerge[n:n+batchSize, :]
                 extraForFakeLocal = extraForFakeMerge[n:n+batchSize, :]
                 memRealLocal = memRealMerge[n:n+batchSize, :]
-                lossG = netG.train_on_batch(extraLocal, memLocal)
+                #lossG = netG.train_on_batch(extraLocal, memLocal)
                 memFake = netG.predict_on_batch(extraForFakeLocal)
                 realFake = np.concatenate((memRealLocal,memFake), axis = 0)
                 labelD = np.zeros((batchSize*2, 1), dtype = np.uint8)
@@ -184,6 +185,7 @@ class GAN(object):
                 lossD = netD.train_on_batch(realFake, labelD)
                 netD.trainable = False                
                 labelA = np.ones((batchSize,1), dtype = np.uint8) #to fool the netD
+                #labelA[:, 0] = 0
                 lossA = netA.train_on_batch(extraForFakeLocal, [memRealLocal, labelA])
                 netD.trainable = True
                 msg = 'epoch of ' + '%d'%m + ' batch of ' + '%d'%(n/batchSize)
