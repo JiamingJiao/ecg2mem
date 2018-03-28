@@ -1,4 +1,8 @@
+monopolar result
+data loading in model.py
+
 visualize loss
 validate loss
 accuracy evaluation
-data loading&processing function
+
+split model and train
