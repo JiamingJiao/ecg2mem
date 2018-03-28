@@ -1,5 +1,4 @@
-Are the input extra of netA and extraForFake the same?
 visualize loss
-validation loss
+validate loss
 accuracy evaluation
 data loading&processing function
