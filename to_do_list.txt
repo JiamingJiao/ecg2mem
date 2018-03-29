@@ -1,9 +1,9 @@
-monopolar result
-data loading in model.py
+train G in A, loss ratio?
 
 visualize loss
 validate loss
 accuracy evaluation
+data loading in model.py
 
 png
 split model and train
