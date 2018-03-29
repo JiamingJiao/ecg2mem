@@ -27,14 +27,17 @@ def loadData(inputPath, cvtDataType = 0, resize = 0, rawRows = 200, rawCols = 20
         mergeImg = np.ndarray((len(fileName), rawRows, rawCols, channels), dtype=np.uint8)
     else:
         mergeImg = np.ndarray((len(fileName), imgRows, imgCols, channels), dtype=np.uint8)
+        tempImg = np.ndarray((imgRows, imgCols, channels), dtype=np.uint8)
     rawImg = np.ndarray((rawRows, rawCols, channels), dtype=np.uint8)
-    tempImg = np.ndarray((rawRows, rawCols, channels), dtype=np.uint8)
+
     j = 0
     for i in fileName:
         rawImg = cv2.imread(i, 0)
         if resize == 1:
             tempImg = vc2.resize(rawImg, imgRows, imgCols)
-        mergeImg[j] = img_to_array(tempImg)
+            mergeImg[j] = img_to_array(tempImg)
+        else:
+            mergeImg[j] = img_to_array(rawImg)
         j += 1
     if cvtDataType == 1:
         mergeImg = mergeImg.astype('float64')

@@ -5,4 +5,5 @@ visualize loss
 validate loss
 accuracy evaluation
 
+png
 split model and train
