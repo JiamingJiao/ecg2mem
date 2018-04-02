@@ -113,7 +113,7 @@ class GAN(object):
         self.channels = channels
 
     def trainGAN(self, extraPath, memPath, extraForFakePath, memRealPath, modelPath, epochsNum = 100, batchSize = 10, valSplit = 0.2, checkPeriod = 10,
-    lossFuncG = 'mae', lossFuncD = 'binary_crossentropy', lossFuncA1 = 'mae', lossFuncA2 = 'binary_crossentropy', lossRatio = 10):
+    lossFuncG = 'mae', lossFuncD = 'binary_crossentropy', lossFuncA1 = 'mae', lossFuncA2 = 'binary_crossentropy', lossRatio = 100):
         network = networks()
         netG = network.uNet()
         netD = network.netD()
@@ -177,7 +177,7 @@ class GAN(object):
                 memLocal = memTrainMerge[n:n+batchSize, :]
                 extraForFakeLocal = extraForFakeMerge[n:n+batchSize, :]
                 memRealLocal = memRealMerge[n:n+batchSize, :]
-                #lossG = netG.train_on_batch(extraLocal, memLocal)
+                lossG = netG.train_on_batch(extraLocal, memLocal)
                 memFake = netG.predict_on_batch(extraForFakeLocal)
                 realFake = np.concatenate((memRealLocal,memFake), axis = 0)
                 labelD = np.zeros((batchSize*2, 1), dtype = np.uint8)

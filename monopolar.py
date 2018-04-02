@@ -35,7 +35,7 @@ for imgNum in range(len(fileName)):
 dst *= 255
 dst = dst.astype('uint8')
 for i in range(0, len(fileName)):
-    dstFileName = dstPath + '/%d'%electrodesNum + '/%04d'%dstStartNum + '.png'
+    dstFileName = dstPath + '/%04d'%dstStartNum + '.png'
     cv.imwrite(dstFileName, dst[i])
     dstStartNum += 1
 print('finished')
