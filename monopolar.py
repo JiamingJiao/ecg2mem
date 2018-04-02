@@ -12,10 +12,10 @@ electrodesNum = 25
 imgRows = 200
 imgCols = 200
 channels = 1
-srcPath = '/mnt/recordings/SimulationResults/mapping/2D/train/extra/*.jpg'
-dstPath = '/mnt/recordings/SimulationResults/mapping/2D/train/extra_sparse'
-dstStartNum = 100
-fileName = glob.glob(srcPath)
+srcPath = '/mnt/recordings/SimulationResults/mapping/2D/train/extra/'
+dstPath = '/mnt/recordings/SimulationResults/mapping/2D/train/extra_sparse/'
+startNum = 0
+fileName = glob.glob(srcPath + '*.jpg')
 src = np.ndarray((len(fileName), imgRows, imgCols, channels), dtype = np.float64)
 src = dataProc.loadData(inputPath = srcPath, cvtDataType = 1)
 kernelSize = 3
@@ -35,7 +35,7 @@ for imgNum in range(len(fileName)):
 dst *= 255
 dst = dst.astype('uint8')
 for i in range(0, len(fileName)):
-    dstFileName = dstPath + '/%04d'%dstStartNum + '.png'
+    dstFileName = dstPath + '%04d'%startNum + '.png'
     cv.imwrite(dstFileName, dst[i])
-    dstStartNum += 1
+    startNum += 1
 print('finished')

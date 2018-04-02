@@ -22,7 +22,7 @@ def npyToJpg(src = "20171225-10", dst = "20180228"):
         cv2.imwrite("/mnt/recordings/SimulationResults/mapping/"+dst+"/data/B/val/%04d"%i+".jpg",npy)
 
 def loadData(inputPath, cvtDataType = 0, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, imgCols = 256, channels = 1):
-    fileName = glob.glob(inputPath)
+    fileName = glob.glob(inputPath + '*.jpg')
     if resize == 0:
         mergeImg = np.ndarray((len(fileName), rawRows, rawCols, channels), dtype=np.uint8)
     else:
@@ -31,14 +31,16 @@ def loadData(inputPath, cvtDataType = 0, resize = 0, rawRows = 200, rawCols = 20
     rawImg = np.ndarray((rawRows, rawCols, channels), dtype=np.uint8)
 
     j = 0
-    for i in fileName:
-        rawImg = cv2.imread(i, 0)
+    startNum = 100
+    for i in range(0, len(fileName)):
+        localName = inputPath + '%04d'%startNum + ".jpg"
+        rawImg = cv2.imread(localName, 0)
         if resize == 1:
             tempImg = vc2.resize(rawImg, imgRows, imgCols)
-            mergeImg[j] = img_to_array(tempImg)
+            mergeImg[i] = img_to_array(tempImg)
         else:
-            mergeImg[j] = img_to_array(rawImg)
-        j += 1
+            mergeImg[i] = img_to_array(rawImg)
+        startNum += 1
     if cvtDataType == 1:
         mergeImg = mergeImg.astype('float64')
         mergeImg /= 255
