@@ -13,21 +13,21 @@ rawCols = 200
 imgRows = 256
 imgCols = 256
 channel = 1
-extraTest = glob.glob('/mnt/recordings/SimulationResults/mapping/2/test/src/extra/*.jpg')
+extraTest = glob.glob('/mnt/recordings/SimulationResults/mapping/2D/test/src/extra/*.jpg')
 extraTestMerge = np.ndarray((len(extraTest),imgRows, imgCols, channel), dtype=np.uint8)
 rawSizeImg = np.ndarray((rawRows, rawCols, channel), dtype=np.uint8)
 resizedImg = np.ndarray((imgRows, imgCols, channel), dtype=np.uint8)
 for j in range(0, len(extraTest)):
-    srcFileName = '/mnt/recordings/SimulationResults/mapping/2/test/src/extra/' + '%04d'%j + '.jpg'
+    srcFileName = '/mnt/recordings/SimulationResults/mapping/2D/test/src/extra/' + '%04d'%j + '.jpg'
     rawImg = cv2.imread(srcFileName,0)
     resizedImg = cv2.resize(rawImg, (imgRows, imgCols))
     extraTestMerge[j] = img_to_array(resizedImg)
-extraTestMerge = extraTestMerge.astype('float32')
+extraTestMerge = extraTestMerge.astype('float64')
 extraTestMerge /= 255
 print('data loaded')
 network = networks()
 model = network.uNet()
-model.load_weights('/mnt/recordings/SimulationResults/mapping/2/checkpoints/20180323/netG_epoch_49.h5')
+model.load_weights('/mnt/recordings/SimulationResults/mapping/2D/checkpoints/20180402_1/netG_epoch_70.h5')
 print('model loaded')
 resultArray = model.predict(extraTestMerge, verbose = 0, batch_size = 10)
 #maxPix = np.max(resultArray)
@@ -40,6 +40,6 @@ resultArray =resultArray.astype('uint8')
 
 for j in range(0, len(extraTest)):
     rawSizeImg = cv2.resize(resultArray[j], (rawRows, rawCols))
-    dstFileName = '/mnt/recordings/SimulationResults/mapping/2/test/dst/mem/20180323/' + '%04d'%j + '.jpg'
+    dstFileName = '/mnt/recordings/SimulationResults/mapping/2D/test/dst/mem/20180402_1/' + '%04d'%j + '.jpg'
     cv2.imwrite(dstFileName, rawSizeImg)
 print('finished')
