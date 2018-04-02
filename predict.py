@@ -13,12 +13,12 @@ rawCols = 200
 imgRows = 256
 imgCols = 256
 channel = 1
-extraTest = glob.glob('/mnt/recordings/SimulationResults/mapping/2D/test/src/extra/*.jpg')
+extraTest = glob.glob('/mnt/recordings/SimulationResults/mapping/2D/test/src/extra_sparse/25/*.png')
 extraTestMerge = np.ndarray((len(extraTest),imgRows, imgCols, channel), dtype=np.uint8)
 rawSizeImg = np.ndarray((rawRows, rawCols, channel), dtype=np.uint8)
 resizedImg = np.ndarray((imgRows, imgCols, channel), dtype=np.uint8)
 for j in range(0, len(extraTest)):
-    srcFileName = '/mnt/recordings/SimulationResults/mapping/2D/test/src/extra/' + '%04d'%j + '.jpg'
+    srcFileName = '/mnt/recordings/SimulationResults/mapping/2D/test/src/extra_sparse/25/' + '%04d'%j + '.png'
     rawImg = cv2.imread(srcFileName,0)
     resizedImg = cv2.resize(rawImg, (imgRows, imgCols))
     extraTestMerge[j] = img_to_array(resizedImg)
@@ -40,6 +40,6 @@ resultArray =resultArray.astype('uint8')
 
 for j in range(0, len(extraTest)):
     rawSizeImg = cv2.resize(resultArray[j], (rawRows, rawCols))
-    dstFileName = '/mnt/recordings/SimulationResults/mapping/2D/test/dst/mem/20180402_1/' + '%04d'%j + '.jpg'
+    dstFileName = '/mnt/recordings/SimulationResults/mapping/2D/test/dst/mem/20180402_1/' + '%04d'%j + '.png'
     cv2.imwrite(dstFileName, rawSizeImg)
 print('finished')
