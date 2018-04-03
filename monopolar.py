@@ -12,12 +12,12 @@ electrodesNum = 25
 imgRows = 200
 imgCols = 200
 channels = 1
-srcPath = '/mnt/recordings/SimulationResults/mapping/2D/train/extra/'
-dstPath = '/mnt/recordings/SimulationResults/mapping/2D/train/extra_sparse/'
-startNum = 0
+srcPath = '/mnt/recordings/SimulationResults/mapping/2D/train/extra_for_fake/'
+dstPath = '/mnt/recordings/SimulationResults/mapping/2D/train/sparse/25/extra_for_fake/'
+startNum = 200
 fileName = glob.glob(srcPath + '*.jpg')
 src = np.ndarray((len(fileName), imgRows, imgCols, channels), dtype = np.float64)
-src = dataProc.loadData(inputPath = srcPath, cvtDataType = 1)
+src = dataProc.loadData(inputPath = srcPath, startNum = startNum, cvtDataType = 1)
 kernelSize = 3
 #gaussianKernel = cv.getGaussianKrnel(3, 0.2, cv.CV_64F)
 temp = np.zeros((kernelSize, kernelSize, channels), np.float64)

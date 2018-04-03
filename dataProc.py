@@ -21,7 +21,7 @@ def npyToJpg(src = "20171225-10", dst = "20180228"):
         npy = 255*(npy-min_b)/(max_b-min_b)
         cv2.imwrite("/mnt/recordings/SimulationResults/mapping/"+dst+"/data/B/val/%04d"%i+".jpg",npy)
 
-def loadData(inputPath, cvtDataType = 0, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, imgCols = 256, channels = 1):
+def loadData(inputPath, startNum = 0, cvtDataType = 0, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, imgCols = 256, channels = 1):
     fileName = glob.glob(inputPath + '*.jpg')
     if resize == 0:
         mergeImg = np.ndarray((len(fileName), rawRows, rawCols, channels), dtype=np.uint8)
@@ -31,7 +31,6 @@ def loadData(inputPath, cvtDataType = 0, resize = 0, rawRows = 200, rawCols = 20
     rawImg = np.ndarray((rawRows, rawCols, channels), dtype=np.uint8)
 
     j = 0
-    startNum = 100
     for i in range(0, len(fileName)):
         localName = inputPath + '%04d'%startNum + ".jpg"
         rawImg = cv2.imread(localName, 0)
