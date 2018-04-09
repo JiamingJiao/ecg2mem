@@ -13,6 +13,7 @@ from keras.optimizers import *
 from keras.callbacks import ModelCheckpoint, LearningRateScheduler
 from keras import backend
 from keras.layers.advanced_activations import LeakyReLU
+import dataProc
 
 class networks(object):
     def __init__(self, imgRows = 256, imgCols = 256, rawRows = 200, rawCols = 200, channels = 1, gKernels = 64, dKernels = 64):
@@ -82,8 +83,10 @@ class networks(object):
         return model
 
     def netD(self):
-        inputs = Input((self.imgRows, self.imgCols,1))
-        conv1 = Conv2D(self.dKernels, 1, padding = 'same', kernel_initializer = 'he_normal')(inputs)
+        inputA = Input((self.imgRows, self.imgCols, 1))
+        inputB = Input((self.imgRows, self.omgCols, 1))
+        combinedImg = Concatenate(axis = 2)([imgA, imgB])
+        conv1 = Conv2D(self.dKernels, 1, padding = 'same', kernel_initializer = 'he_normal')(combinedImg)
         conv1 = LeakyReLU(alpha = 0.2)(conv1)
         conv2 = Conv2D(self.dKernels*2, 1, padding = 'same', kernel_initializer = 'he_normal')(conv1)
         conv2 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(conv2)
@@ -92,16 +95,18 @@ class networks(object):
         conv4 = Conv2D(1, 1, activation = 'sigmoid')(conv3)
         flat = Flatten()(conv4)
         probability = Dense(1, activation = 'softmax')(flat)
-        model = Model(input = inputs, output = probability, name='netD')
+        model = Model(input = [inputA, inputB], output = probability, name='netD')
         #model.compile(optimizer = Adam(lr = 1e-4), loss = 'binary_crossentropy', metrics = ['accuracy'])
         return model
 
     def netA(self):
-        inputs = Input((self.imgRows, self.imgCols,1))
-        fake = self.uNet()(inputs)
-        #realFake = merge([inputs, fake], mode = 'concat', concat_axis = 1)
-        outputD = self.netD()(fake)
-        netA = Model(input = [inputs], output = [fake, outputD], name = 'netA')
+        self.netD.trainable = False
+        netG.compile(optimizer = Adam(lr = 1e-4), loss = lossFuncG, metrics = ['accuracy'])
+        inputA = Input((self.imgRows, self.imgCols,1))
+        inputB = Input((self.imgRows, self.imgCols,1))
+        fakeB = self.uNet()(inputA)
+        outputD = self.netD()([inputA, fakeB])
+        netA = Model(input = [inputA, inputB], output = [fakeB, outputD], name = 'netA')
         return netA
 
 class GAN(object):
@@ -119,75 +124,29 @@ class GAN(object):
         netD = network.netD()
         netA = network.netA()
         netG.compile(optimizer = Adam(lr = 1e-4), loss = lossFuncG, metrics = ['accuracy'])
-        netD.trainable = True
         netD.compile(optimizer = Adam(lr = 1e-4), loss = lossFuncD, metrics = ['accuracy'])
         netA.compile(optimizer = Adam(lr = 1e-4), loss = [lossFuncA1, lossFuncA2], loss_weights = [lossRatio, 1], metrics = ['accuracy'])
 
-        extraTrain = glob.glob(extraPath)
-        memTrain = glob.glob(memPath)
-        extraForFake = glob.glob(extraForFakePath)
-        memReal = glob.glob(memRealPath)
-        extraTrainMerge = np.ndarray((len(extraTrain), self.imgRows, self.imgCols, self.channels), dtype=np.uint8)
-        memTrainMerge = np.ndarray((len(memTrain), self.imgRows, self.imgCols, self.channels), dtype=np.uint8)
-        extraForFakeMerge = np.ndarray((len(extraForFake), self.imgRows, self.imgCols, self.channels), dtype=np.uint8)
-        memRealMerge = np.ndarray((len(memReal), self.imgRows, self.imgCols, self.channels), dtype=np.uint8)
-        rawImg = np.ndarray((self.rawRows, self.rawCols, self.channels), dtype=np.uint8)
-        tempImg = np.ndarray((self.rawRows, self.rawCols, self.channels), dtype=np.uint8)
-        j = 0
-        for i in extraTrain:
-            #rawImg = load_img(i)
-            rawImg = cv2.imread(i,0)
-            tempImg = cv2.resize(rawImg, (self.imgRows, self.imgCols))
-            extraTrainMerge[j] = img_to_array(tempImg)
-            j += 1
-        extraTrainMerge = extraTrainMerge.astype('float32')
-        extraTrainMerge /= 255
-        j = 0
-        for i in memTrain:
-            #rawImg = load_img(i)
-            rawImg = cv2.imread(i,0)
-            tempImg = cv2.resize(rawImg, (self.imgRows, self.imgCols))
-            memTrainMerge[j] = img_to_array(tempImg)
-            j += 1
-        memTrainMerge = memTrainMerge.astype('float32')
-        memTrainMerge /= 255
-        j = 0
-        for i in extraForFake:
-            #rawImg = load_img(i)
-            rawImg = cv2.imread(i,0)
-            tempImg = cv2.resize(rawImg, (self.imgRows, self.imgCols))
-            extraForFakeMerge[j] = img_to_array(tempImg)
-            j += 1
-        extraForFakeMerge = extraForFakeMerge.astype('float32')
-        extraForFakeMerge /= 255
-        j = 0
-        for i in memReal:
-            #rawImg = load_img(i)
-            rawImg = cv2.imread(i,0)
-            tempImg = cv2.resize(rawImg, (self.imgRows, self.imgCols))
-            memRealMerge[j] = img_to_array(tempImg)
-            j += 1
-        memRealMerge = memRealMerge.astype('float32')
-        memRealMerge /= 255
-
+        extraTrain = dataProc.loadData(inputPath = extraPath, startNum = 0, resize = 1, cvtDataType = 1)
+        memTrain = dataProc.loadData(inputPath = memPath, startNum = 0, resize = 1, cvtDataType = 1)
 
         for m in range(epochsNum):
-            for n in range(0, len(memRealMerge), batchSize):
-                extraLocal = extraTrainMerge[n:n+batchSize, :]
-                memLocal = memTrainMerge[n:n+batchSize, :]
-                extraForFakeLocal = extraForFakeMerge[n:n+batchSize, :]
-                memRealLocal = memRealMerge[n:n+batchSize, :]
-                lossG = netG.train_on_batch(extraLocal, memLocal)
-                memFake = netG.predict_on_batch(extraForFakeLocal)
-                realFake = np.concatenate((memRealLocal,memFake), axis = 0)
+            for n in range(0, len(extraTrain), batchSize):
+                extraLocal = extraTrain[n:n+batchSize, :]
+                memLocal = memTrain[n:n+batchSize, :]
+                #extraForFakeLocal = extraForFakeMerge[n:n+batchSize, :]
+                #memRealLocal = memRealMerge[n:n+batchSize, :]
+                #lossG = netG.train_on_batch(extraLocal, memLocal)
+                memFake = netG.predict_on_batch(extraLocal)
+                extraForD = np.concatenate((extraLocal,extraLocal), axis = 0)
+                realFake = np.concatenate((memLocal,memFake), axis = 0)
                 labelD = np.zeros((batchSize*2, 1), dtype = np.uint8)
                 labelD[0:batchSize, :] = 1
-                lossD = netD.train_on_batch(realFake, labelD)
-                netD.trainable = False                
-                labelA = np.ones((batchSize,1), dtype = np.uint8) #to fool the netD
-                #labelA[:, 0] = 0
-                lossA = netA.train_on_batch(extraForFakeLocal, [memRealLocal, labelA])
                 netD.trainable = True
+                lossD = netD.train_on_batch([extraForD, realFake], labelD)
+                netD.trainable = False
+                labelA = np.ones((batchSize,1), dtype = np.uint8) #to fool the netD
+                lossA = netA.train_on_batch(extraLocal, [memRealLocal, labelA])
                 msg = 'epoch of ' + '%d'%m + ' batch of ' + '%d'%(n/batchSize)
                 print(msg)
             weightsNetGPath = modelPath + 'netG_epoch_%d'%m + '.h5'
@@ -197,36 +156,3 @@ class GAN(object):
             weightsNetAPath = modelPath + 'netA_epoch_%d'%m + '.h5'
             netA.save_weights(weightsNetAPath, overwrite = True)
         print('training finished')
-
-    def trainUNet(self, extraPath, memPath, modelPath):
-        extraTrain = glob.glob(extraPath)
-        memTrain = glob.glob(memPath)
-        extraTrainMerge = np.ndarray((len(extraTrain), self.imgRows, self.imgCols, self.channels), dtype=np.uint8)
-        memTrainMerge = np.ndarray((len(memTrain), self.imgRows, self.imgCols, self.channels), dtype=np.uint8)
-        rawImg = np.ndarray((self.rawRows, self.rawCols, self.channels), dtype=np.uint8)
-        tempImg = np.ndarray((self.rawRows, self.rawCols, self.channels), dtype=np.uint8)
-        j = 0
-        for i in extraTrain:
-            #rawImg = load_img(i)
-            rawImg = cv2.imread(i,0)
-            tempImg = cv2.resize(rawImg, (self.imgRows, self.imgCols))
-            extraTrainMerge[j] = img_to_array(tempImg)
-            j += 1
-        extraTrainMerge = extraTrainMerge.astype('float32')
-        extraTrainMerge /= 255
-        j = 0
-        for i in memTrain:
-            #rawImg = load_img(i)
-            rawImg = cv2.imread(i,0)
-            tempImg = cv2.resize(rawImg, (self.imgRows, self.imgCols))
-            memTrainMerge[j] = img_to_array(tempImg)
-            j += 1
-        memTrainMerge = memTrainMerge.astype('float32')
-        memTrainMerge /= 255
-        # train model
-        model = self.uNet()
-        #checkpoints = ModelCheckpoint('/mnt/recordings/SimulationResults/mapping/2/checkpoints/20180314.hdf5', monitor = 'loss', verbose = 2,
-        #save_best_only = True, save_weights_only = True, mode = 'auto', period = 20)
-        checkpoints = ModelCheckpoint(modelPath, monitor = 'loss', verbose = 2, save_best_only = True, save_weights_only = False, mode = 'auto', period = 20)
-        model.fit(extraTrainMerge, memTrainMerge, batch_size = 10, epochs = 100, verbose = 2, validation_split = 0.4, shuffle = True,
-        callbacks=[checkpoints])

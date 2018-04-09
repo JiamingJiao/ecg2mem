@@ -8,21 +8,21 @@ import os
 import keras
 from keras.preprocessing.image import array_to_img, img_to_array
 
-def npyToJpg(src = "20171225-10", dst = "20180228"):
+def npyToPng(simulationNum = "20171225-10"):
     max_a = 19.766789
     min_a = -11.055192
     max_b = 17.245272
     min_b = -88.138232
     for i in range(0, 1000, 1):
-        npy = numpy.load("/mnt/recordings/SimulationResults/2D/"+src+"/phie_"+"%04d"%i+".npy")
+        npy = numpy.load("/mnt/recordings/SimulationResults/2D/"+simulationNum+"/phie_"+"%04d"%i+".npy")
         npy = 255*(npy-min_a)/(max_a-min_a)
-        cv2.imwrite("/mnt/recordings/SimulationResults/mapping/"+dst+"/data/A/val/%04d"%i+".jpg",npy)
-        npy = numpy.load("/mnt/recordings/SimulationResults/2D/"+src+"/vmem_"+"%04d"%i+".npy")
+        cv2.imwrite("/mnt/recordings/SimulationResults/mapping/simulation_data/"+simulationNum+"/extra/%04d"%i+".png",npy)
+        npy = numpy.load("/mnt/recordings/SimulationResults/2D/"+simulationNum+"/vmem_"+"%04d"%i+".npy")
         npy = 255*(npy-min_b)/(max_b-min_b)
-        cv2.imwrite("/mnt/recordings/SimulationResults/mapping/"+dst+"/data/B/val/%04d"%i+".jpg",npy)
+        cv2.imwrite("/mnt/recordings/SimulationResults/mapping/simulation_data/"+simulationNum+"/mem/%04d"%i+".png",npy)
 
 def loadData(inputPath, startNum = 0, cvtDataType = 0, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, imgCols = 256, channels = 1):
-    fileName = glob.glob(inputPath + '*.jpg')
+    fileName = glob.glob(inputPath + '*.png')
     if resize == 0:
         mergeImg = np.ndarray((len(fileName), rawRows, rawCols, channels), dtype=np.uint8)
     else:
@@ -30,7 +30,7 @@ def loadData(inputPath, startNum = 0, cvtDataType = 0, resize = 0, rawRows = 200
         tempImg = np.ndarray((imgRows, imgCols, channels), dtype=np.uint8)
     rawImg = np.ndarray((rawRows, rawCols, channels), dtype=np.uint8)
     for i in range(0, len(fileName)):
-        localName = inputPath + '%04d'%startNum + ".jpg"
+        localName = inputPath + '%04d'%startNum + ".png"
         rawImg = cv2.imread(localName, 0)
         if resize == 1:
             tempImg = cv2.resize(rawImg, imgRows, imgCols)
