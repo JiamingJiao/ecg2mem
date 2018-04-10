@@ -14,8 +14,8 @@ imgCols = 200
 channels = 1
 srcPath = '/mnt/recordings/SimulationResults/mapping/2D/train/extra_for_fake/'
 dstPath = '/mnt/recordings/SimulationResults/mapping/2D/train/sparse/25/extra_for_fake/'
-startNum = 200
-fileName = glob.glob(srcPath + '*.jpg')
+startNum = 0
+fileName = glob.glob(srcPath + '*.png')
 src = np.ndarray((len(fileName), imgRows, imgCols, channels), dtype = np.float64)
 src = dataProc.loadData(inputPath = srcPath, startNum = startNum, cvtDataType = 1)
 kernelSize = 3
