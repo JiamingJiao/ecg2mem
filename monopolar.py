@@ -12,8 +12,8 @@ electrodesNum = 25
 imgRows = 200
 imgCols = 200
 channels = 1
-srcPath = '/mnt/recordings/SimulationResults/mapping/2D/train/extra_for_fake/'
-dstPath = '/mnt/recordings/SimulationResults/mapping/2D/train/sparse/25/extra_for_fake/'
+srcPath = '/mnt/recordings/SimulationResults/mapping/simulation_data/20171225-9/extra/'
+dstPath = '/mnt/recordings/SimulationResults/mapping/2D/train/sparse/20180416/extra/'
 startNum = 0
 fileName = glob.glob(srcPath + '*.png')
 src = np.ndarray((len(fileName), imgRows, imgCols, channels), dtype = np.float64)
@@ -38,4 +38,4 @@ for i in range(0, len(fileName)):
     dstFileName = dstPath + '%04d'%startNum + '.png'
     cv.imwrite(dstFileName, dst[i])
     startNum += 1
-print('finished')
+print('completed')

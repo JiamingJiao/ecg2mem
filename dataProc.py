@@ -14,12 +14,13 @@ def npyToPng(simulationNum = "20171225-10"):
     max_b = 17.245272
     min_b = -88.138232
     for i in range(0, 1000, 1):
-        npy = numpy.load("/mnt/recordings/SimulationResults/2D/"+simulationNum+"/phie_"+"%04d"%i+".npy")
+        npy = np.load("/mnt/recordings/SimulationResults/2D/"+simulationNum+"/phie_"+"%04d"%i+".npy")
         npy = 255*(npy-min_a)/(max_a-min_a)
         cv2.imwrite("/mnt/recordings/SimulationResults/mapping/simulation_data/"+simulationNum+"/extra/%04d"%i+".png",npy)
-        npy = numpy.load("/mnt/recordings/SimulationResults/2D/"+simulationNum+"/vmem_"+"%04d"%i+".npy")
+        npy = np.load("/mnt/recordings/SimulationResults/2D/"+simulationNum+"/vmem_"+"%04d"%i+".npy")
         npy = 255*(npy-min_b)/(max_b-min_b)
         cv2.imwrite("/mnt/recordings/SimulationResults/mapping/simulation_data/"+simulationNum+"/mem/%04d"%i+".png",npy)
+    print('completed')
 
 def loadData(inputPath, startNum = 0, cvtDataType = 0, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, imgCols = 256, channels = 1):
     fileName = glob.glob(inputPath + '*.png')
@@ -33,7 +34,7 @@ def loadData(inputPath, startNum = 0, cvtDataType = 0, resize = 0, rawRows = 200
         localName = inputPath + '%04d'%startNum + ".png"
         rawImg = cv2.imread(localName, 0)
         if resize == 1:
-            tempImg = cv2.resize(rawImg, imgRows, imgCols)
+            tempImg = cv2.resize(rawImg, (imgRows, imgCols))
             mergeImg[i] = img_to_array(tempImg)
         else:
             mergeImg[i] = img_to_array(rawImg)

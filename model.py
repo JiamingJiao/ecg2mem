@@ -84,8 +84,8 @@ class networks(object):
 
     def netD(self):
         inputA = Input((self.imgRows, self.imgCols, 1))
-        inputB = Input((self.imgRows, self.omgCols, 1))
-        combinedImg = Concatenate(axis = 2)([imgA, imgB])
+        inputB = Input((self.imgRows, self.imgCols, 1))
+        combinedImg = merge([inputA, inputB], mode = 'concat', concat_axis = 2)
         conv1 = Conv2D(self.dKernels, 1, padding = 'same', kernel_initializer = 'he_normal')(combinedImg)
         conv1 = LeakyReLU(alpha = 0.2)(conv1)
         conv2 = Conv2D(self.dKernels*2, 1, padding = 'same', kernel_initializer = 'he_normal')(conv1)
@@ -100,13 +100,11 @@ class networks(object):
         return model
 
     def netA(self):
-        self.netD.trainable = False
-        netG.compile(optimizer = Adam(lr = 1e-4), loss = lossFuncG, metrics = ['accuracy'])
         inputA = Input((self.imgRows, self.imgCols,1))
-        inputB = Input((self.imgRows, self.imgCols,1))
+#        inputB = Input((self.imgRows, self.imgCols,1))
         fakeB = self.uNet()(inputA)
         outputD = self.netD()([inputA, fakeB])
-        netA = Model(input = [inputA, inputB], output = [fakeB, outputD], name = 'netA')
+        netA = Model(input = inputA, output = [fakeB, outputD], name = 'netA')
         return netA
 
 class GAN(object):
@@ -117,8 +115,8 @@ class GAN(object):
         self.rawCols = rawCols
         self.channels = channels
 
-    def trainGAN(self, extraPath, memPath, extraForFakePath, memRealPath, modelPath, epochsNum = 100, batchSize = 10, valSplit = 0.2, checkPeriod = 10,
-    lossFuncG = 'mae', lossFuncD = 'binary_crossentropy', lossFuncA1 = 'mae', lossFuncA2 = 'binary_crossentropy', lossRatio = 100):
+    def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, batchSize = 10, valSplit = 0.2, checkPeriod = 10,
+    lossFuncG = 'mae', lossFuncD = 'binary_crossentropy', lossFuncA1 = 'mae', lossFuncA2 = 'binary_crossentropy', lossRatio = 100, saveFrequency = 5):
         network = networks()
         netG = network.uNet()
         netD = network.netD()
@@ -132,6 +130,8 @@ class GAN(object):
 
         for m in range(epochsNum):
             for n in range(0, len(extraTrain), batchSize):
+                if m == 0 and n == 0:
+                    print('begin training')
                 extraLocal = extraTrain[n:n+batchSize, :]
                 memLocal = memTrain[n:n+batchSize, :]
                 #extraForFakeLocal = extraForFakeMerge[n:n+batchSize, :]
@@ -146,13 +146,14 @@ class GAN(object):
                 lossD = netD.train_on_batch([extraForD, realFake], labelD)
                 netD.trainable = False
                 labelA = np.ones((batchSize,1), dtype = np.uint8) #to fool the netD
-                lossA = netA.train_on_batch(extraLocal, [memRealLocal, labelA])
+                lossA = netA.train_on_batch(extraLocal, [memLocal, labelA])
                 msg = 'epoch of ' + '%d'%m + ' batch of ' + '%d'%(n/batchSize)
                 print(msg)
-            weightsNetGPath = modelPath + 'netG_epoch_%d'%m + '.h5'
-            netG.save_weights(weightsNetGPath, overwrite = True)
-            weightsNetDPath = modelPath + 'netD_epoch_%d'%m + '.h5'
-            netD.save_weights(weightsNetDPath, overwrite = True)
-            weightsNetAPath = modelPath + 'netA_epoch_%d'%m + '.h5'
-            netA.save_weights(weightsNetAPath, overwrite = True)
-        print('training finished')
+            if m % saveFrequency == 0:
+                weightsNetGPath = modelPath + 'netG_epoch_%d'%m + '.h5'
+                netG.save_weights(weightsNetGPath, overwrite = True)
+                weightsNetDPath = modelPath + 'netD_epoch_%d'%m + '.h5'
+                netD.save_weights(weightsNetDPath, overwrite = True)
+                weightsNetAPath = modelPath + 'netA_epoch_%d'%m + '.h5'
+                netA.save_weights(weightsNetAPath, overwrite = True)
+        print('training completed')
