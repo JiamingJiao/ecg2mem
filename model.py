@@ -27,7 +27,7 @@ class networks(object):
 
     #Unet
     def uNet(self):
-        inputs = Input((self.imgRows, self.imgCols,1)) # single channel
+        inputs = Input((self.imgRows, self.imgCols, self.channels))
 
         encoder1 = Conv2D(self.gKernels, 4, strides = 2, padding = 'same', kernel_initializer = 'he_normal')(inputs)
         encoder2 = Conv2D(self.gKernels*2, 4, strides = 2, padding = 'same', kernel_initializer = 'he_normal')(encoder1)
@@ -83,8 +83,8 @@ class networks(object):
         return model
 
     def netD(self):
-        inputA = Input((self.imgRows, self.imgCols, 1))
-        inputB = Input((self.imgRows, self.imgCols, 1))
+        inputA = Input((self.imgRows, self.imgCols, self.channels))
+        inputB = Input((self.imgRows, self.imgCols, self.channels))
         combinedImg = merge([inputA, inputB], mode = 'concat', concat_axis = 2)
         conv1 = Conv2D(self.dKernels, 1, padding = 'same', kernel_initializer = 'he_normal')(combinedImg)
         conv1 = LeakyReLU(alpha = 0.2)(conv1)
@@ -100,11 +100,14 @@ class networks(object):
         return model
 
     def netA(self):
-        inputA = Input((self.imgRows, self.imgCols,1))
-#        inputB = Input((self.imgRows, self.imgCols,1))
-        fakeB = self.uNet()(inputA)
-        outputD = self.netD()([inputA, fakeB])
-        netA = Model(input = inputA, output = [fakeB, outputD], name = 'netA')
+        inputA = Input((self.imgRows, self.imgCols, self.channels))
+        inputB = Input((self.imgRows, self.imgCols, self.channels))
+        netG = self.uNet()
+        netD = self.netD()
+        fakeB = netG(inputA)
+        outputD = netD([inputA, fakeB])
+        netD.tainable = False
+        netA = Model(input = [inputA, inputB], output = [fakeB, outputD], name = 'netA')
         return netA
 
 class GAN(object):
@@ -120,13 +123,15 @@ class GAN(object):
         network = networks()
         netG = network.uNet()
         netD = network.netD()
-        netA = network.netA()
         netG.compile(optimizer = Adam(lr = 1e-4), loss = lossFuncG, metrics = ['accuracy'])
         netD.compile(optimizer = Adam(lr = 1e-4), loss = lossFuncD, metrics = ['accuracy'])
+        netA = network.netA()
         netA.compile(optimizer = Adam(lr = 1e-4), loss = [lossFuncA1, lossFuncA2], loss_weights = [lossRatio, 1], metrics = ['accuracy'])
 
-        extraTrain = dataProc.loadData(inputPath = extraPath, startNum = 0, resize = 1, cvtDataType = 1)
-        memTrain = dataProc.loadData(inputPath = memPath, startNum = 0, resize = 1, cvtDataType = 1)
+        extraTrain = dataProc.loadData(inputPath = extraPath, startNum = 0, resize = 1)
+        memTrain = dataProc.loadData(inputPath = memPath, startNum = 0, resize = 1)
+        extraTrain = extraTrain.reshape((extraTrain.shape[0], self.imgRows, self.imgCols, self.channels))
+        memTrain = extraTrain.reshape((memTrain.shape[0], self.imgRows, self.imgCols, self.channels))
 
         for m in range(epochsNum):
             for n in range(0, len(extraTrain), batchSize):
@@ -136,7 +141,7 @@ class GAN(object):
                 memLocal = memTrain[n:n+batchSize, :]
                 #extraForFakeLocal = extraForFakeMerge[n:n+batchSize, :]
                 #memRealLocal = memRealMerge[n:n+batchSize, :]
-                #lossG = netG.train_on_batch(extraLocal, memLocal)
+                lossG = netG.train_on_batch(extraLocal, memLocal)
                 memFake = netG.predict_on_batch(extraLocal)
                 extraForD = np.concatenate((extraLocal,extraLocal), axis = 0)
                 realFake = np.concatenate((memLocal,memFake), axis = 0)
@@ -146,10 +151,10 @@ class GAN(object):
                 lossD = netD.train_on_batch([extraForD, realFake], labelD)
                 netD.trainable = False
                 labelA = np.ones((batchSize,1), dtype = np.uint8) #to fool the netD
-                lossA = netA.train_on_batch(extraLocal, [memLocal, labelA])
-                msg = 'epoch of ' + '%d'%m + ' batch of ' + '%d'%(n/batchSize)
+                lossA = netA.train_on_batch([extraLocal, memLocal], [memLocal, labelA])
+                msg = 'epoch of ' + '%d'%m + ' batch of ' + '%d'%(n/batchSize) + 'lossD=%f'%lossD[0] + 'lossG=%f'%lossG[0]
                 print(msg)
-            if m % saveFrequency == 0:
+            if m % saveFrequency == (saveFrequency-1):
                 weightsNetGPath = modelPath + 'netG_epoch_%d'%m + '.h5'
                 netG.save_weights(weightsNetGPath, overwrite = True)
                 weightsNetDPath = modelPath + 'netD_epoch_%d'%m + '.h5'
