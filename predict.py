@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+'''
 import numpy as np
 import cv2
 import keras
@@ -43,3 +44,24 @@ for j in range(0, len(extraTest)):
     dstFileName = '/mnt/recordings/SimulationResults/mapping/2D/test/dst/mem/20180402_1/' + '%04d'%j + '.png'
     cv2.imwrite(dstFileName, rawSizeImg)
 print('finished')
+'''
+
+import numpy as np
+import cv2 as cv
+import dataProc
+import keras
+from keras.models import *
+from model import *
+
+src = dataProc.loadData('/mnt/recordings/SimulationResults/mapping/2D/simulation_data/20180308-1/', resize = 1)
+network = networks()
+model = network.uNet()
+model.load_weights('/mnt/recordings/SimulationResults/mapping/2D/checkpoints/20180515_1/netG_epoch_49.h5')
+print('model loaded')
+dst = model.predict(src, batch_size = 10)
+rawSizeImg = np.ndarray((200, 200), datype = np.float64)
+for i in range(0, src.shape[0]):
+    rawSizeImg = cv.resize(src[i, :, :], (200, 200))
+    dstFileName = '/mnt/recordings/SimulationResults/mapping/2D/test/dst/mem/20180516_1/npy/' + '%04d'%j + '.npy'
+    np.save(dstFileName, rawSizeImg)
+print('completed')

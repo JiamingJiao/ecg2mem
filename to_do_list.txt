@@ -1,9 +1,4 @@
-train G in A, loss ratio?
+discriminator?(test with other dataset)
 
-visualize loss
+focal loss of netD
 validate loss
-accuracy evaluation
-data loading in model.py
-
-png
-split model and train
