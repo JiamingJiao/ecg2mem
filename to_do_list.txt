@@ -1,4 +1,8 @@
+sample pseudoECG
+speed up
+
 discriminator?(test with other dataset)
 
+rotate images
 focal loss of netD
 validate loss
