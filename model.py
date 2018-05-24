@@ -6,7 +6,6 @@ import cv2 as cv
 import os
 import glob
 import keras
-from keras.preprocessing.image import array_to_img, img_to_array, load_img
 from keras.models import *
 from keras.layers import Input, merge, Conv2D, UpSampling2D, Dropout, BatchNormalization, Flatten, Dense, MaxPooling2D
 from keras.optimizers import *
@@ -79,24 +78,32 @@ class networks(object):
         decoder9 = Conv2D(1, 1, activation = 'sigmoid')(decoder8)
 
         model = Model(input = inputs, output = decoder9, name = 'uNet')
-        #model.compile(optimizer = Adam(lr = 1e-4), loss = 'mean_absolute_percentage_error', metrics = ['accuracy'])
         return model
 
-    def netD(self):
+    def straight3(self):
         inputA = Input((self.imgRows, self.imgCols, self.channels))
         inputB = Input((self.imgRows, self.imgCols, self.channels))
         combinedImg = merge([inputA, inputB], mode = 'concat', concat_axis = -1)
-        conv1 = Conv2D(self.dKernels, 1, padding = 'same', kernel_initializer = 'he_normal')(combinedImg)
-        conv1 = LeakyReLU(alpha = 0.2)(conv1)
-        conv2 = Conv2D(self.dKernels*2, 1, padding = 'same', kernel_initializer = 'he_normal')(conv1)
+        conv1 = Conv2D(self.dKernels, 3, padding = 'same', kernel_initializer = 'he_normal')(combinedImg)
+        pool1 = MaxPooling2D((4, 4))(conv1)
+        conv1 = LeakyReLU(alpha = 0.2)(pool1)
+        conv2 = Conv2D(self.dKernels*2, 3, padding = 'same', kernel_initializer = 'he_normal')(pool1)
         conv2 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(conv2)
-        conv2 = LeakyReLU(alpha = 0.2)(conv2)
-        conv3 = Conv2D(1, 1, padding = 'same', kernel_initializer = 'he_normal')(conv2)
-        conv4 = Conv2D(1, 1, activation = 'sigmoid')(conv3)
-        flat = Flatten()(conv4)
-        probability = Dense(2, activation = 'softmax')(flat)
-        model = Model(input = [inputA, inputB], output = probability, name='netD')
-        #model.compile(optimizer = Adam(lr = 1e-4), loss = 'binary_crossentropy', metrics = ['accuracy'])
+        pool2 = MaxPooling2D((4, 4))(conv2)
+        conv2 = LeakyReLU(alpha = 0.2)(pool2)
+        conv3 = Conv2D(self.dKernels*4, 3, padding = 'same', kernel_initializer = 'he_normal')(conv2)
+        conv3 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(conv3)
+        pool3 = MaxPooling2D((2, 2))(conv3)
+        conv3 = LeakyReLU(alpha = 0.2)(pool3)
+        flatten4 = Flatten()(conv3)
+        dense4 = Dense(self.dKernels*16)(flatten4)
+        dense4 = LeakyReLU(alpha = 0.2)(dense4)
+        drop4 = Dropout(0.5)(dense4)
+        dense5 = Dense(self.dKernels*16)(drop4)
+        dense5 = LeakyReLU(alpha = 0.2)(dense5)
+        drop5 = Dropout(0.5)(dense5)
+        probability = Dense(2, activation = 'softmax')(drop5)
+        model = Model(input = [inputA, inputB], output = probability, name='straight3')
         return model
 
     def vgg16(self):
@@ -123,10 +130,11 @@ class networks(object):
         pool5 = MaxPooling2D((2,2))(conv5)
         flatten6 = Flatten()(pool5)
         dense6 = Dense(self.dKernels*64, activation = 'relu')(flatten6)
-        dense6 = Dense(self.dKernels*64, activation = 'relu')(dense6)
-        probability = Dense(2, activation = 'softmax')(dense6)
+        drop6 = Dropout(0.5)(dense6)
+        dense7 = Dense(self.dKernels*64, activation = 'relu')(drop6)
+        drop7 = Dropout(0.5)(dense7)
+        probability = Dense(2, activation = 'softmax')(drop7)
         model = Model(input = [inputA, inputB], output = probability, name='VGG16')
-        #model = Model(input = inputB, output = probability, name='VGG16')
         return model
 
     def netA(self):
@@ -135,11 +143,8 @@ class networks(object):
         netG = self.uNet()
         netD = self.vgg16()
         fakeB = netG(inputA)
-        #outputD = netD(fakeB)
         outputD = netD([inputA, fakeB])
-        #netD.tainable = False
         netA = Model(input = [inputA, inputB], output = [fakeB, outputD], name = 'netA')
-        #netA = Model(input = inputB, output = [fakeB, outputD], name = 'netA')
         return netA
 
 class GAN(object):
@@ -154,46 +159,48 @@ class GAN(object):
     lossFuncG = 'mae', lossFuncD = 'binary_crossentropy', lossFuncA1 = 'mae', lossFuncA2 = 'binary_crossentropy', lossRatio = 100, saveFrequency = 5):
         network = networks()
         netG = network.uNet()
-        netD = network.vgg16()
+        netD = network.straight3()
         netA = network.netA()
         netD.trainble = False
         netA.compile(optimizer = Adam(lr = 1e-4), loss = [lossFuncA1, lossFuncA2], loss_weights = [lossRatio, 1], metrics = ['accuracy'])
         netD.trainable = True
         netG.compile(optimizer = Adam(lr = 1e-4), loss = lossFuncG, metrics = ['accuracy'])
-        netD.compile(optimizer = Adam(lr = 1e-4), loss = lossFuncD, metrics = ['accuracy'])
-        #netD.trainable = False
-
-
-
+        netD.compile(optimizer = Adam(lr = 1e-6), loss = lossFuncD, metrics = ['accuracy'])
         extraTrain = dataProc.loadData(inputPath = extraPath, startNum = 0, resize = 1, normalization = 1)
         memTrain = dataProc.loadData(inputPath = memPath, startNum = 0, resize = 1, normalization = 1)
         extraTrain = extraTrain.reshape((extraTrain.shape[0], self.imgRows, self.imgCols, self.channels))
         memTrain = extraTrain.reshape((memTrain.shape[0], self.imgRows, self.imgCols, self.channels))
-
+        lossRecorder = np.ndarray((round(extraTrain.shape[0]/batchSize)*epochsNum, 2), dtype = np.float32)
+        lossCounter = 0
+        minLossG = 10000.0
+        saveStamp =(0, 0)
         for m in range(epochsNum):
             for n in range(0, len(extraTrain), batchSize):
                 if m == 0 and n == 0:
                     print('begin training')
                 extraLocal = extraTrain[n:n+batchSize, :]
                 memLocal = memTrain[n:n+batchSize, :]
-                #extraForFakeLocal = extraForFakeMerge[n:n+batchSize, :]
-                #memRealLocal = memRealMerge[n:n+batchSize, :]
-                #lossG = netG.train_on_batch(extraLocal, memLocal)
                 memFake = netG.predict_on_batch(extraLocal)
                 extraForD = np.concatenate((extraLocal,extraLocal), axis = 0)
                 realFake = np.concatenate((memLocal,memFake), axis = 0)
                 labelD = np.zeros((batchSize*2, 2), dtype = np.float64)
                 labelD[0:batchSize, 0] = 1
                 labelD[batchSize:batchSize*2, 1] = 1
-
                 lossD = netD.train_on_batch([extraForD, realFake], labelD)
-                #lossD = netD.train_on_batch(realFake, labelD)
                 labelA = np.ones((batchSize, 2), dtype = np.float64) #to fool the netD
                 labelA[:, 1] = 0
                 lossA = netA.train_on_batch([extraLocal, memLocal], [memLocal, labelA])
-                #lossA = netA.train_on_batch(extraLocal, [memLocal, labelA])
+                lossRecorder[lossCounter, 0] = lossD[0]
+                lossRecorder[lossCounter, 1] = lossA[0]
+                lossCounter += 1
                 msg = 'epoch of ' + '%d'%m + ' batch of ' + '%d'%(n/batchSize) + 'lossD=%f'%lossD[0] + 'lossG=%f'%lossA[0]
-                print(msg)
+                print(msg + ' lossA.shape is ' + '%d'%len(lossA))
+                if (minLossG > lossA[0]):
+                    weightsNetGPath = modelPath + 'netG_latest.h5'
+                    netnetG.save_weights(weightsNetGPath, overwrite = True)
+                    minLossG = lossA[0]
+                    saveStamp = (m+1, round(n/batchSize+1))
+                '''
             if m % saveFrequency == (saveFrequency-1):
                 weightsNetGPath = modelPath + 'netG_epoch_%d'%m + '.h5'
                 netG.save_weights(weightsNetGPath, overwrite = True)
@@ -201,4 +208,7 @@ class GAN(object):
                 #netD.save_weights(weightsNetDPath, overwrite = True)
                 #weightsNetAPath = modelPath + 'netA_epoch_%d'%m + '.h5'
                 #netA.save_weights(weightsNetAPath, overwrite = True)
+                '''
+        os.rename(modelPath+'netG_latest.h5', modelPath+'netG_%d_epochs_'%saveStamp[0]+'%d_batchs.h5'%saveStamp[1])
+        np.save(modelPath + 'loss', lossRecorder)
         print('training completed')

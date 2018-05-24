@@ -1,8 +1,7 @@
-sample pseudoECG
-speed up
-
-discriminator?(test with other dataset)
-
-rotate images
-focal loss of netD
 validate loss
+rotate images
+pass some parameters using arguments
+
+speed up pseudoECG generator
+
+focal loss of netD
