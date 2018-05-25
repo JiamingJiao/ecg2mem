@@ -27,7 +27,6 @@ class networks(object):
     #Unet
     def uNet(self):
         inputs = Input((self.imgRows, self.imgCols, self.channels))
-
         encoder1 = Conv2D(self.gKernels, 4, strides = 2, padding = 'same', kernel_initializer = 'he_normal')(inputs)
         encoder2 = Conv2D(self.gKernels*2, 4, strides = 2, padding = 'same', kernel_initializer = 'he_normal')(encoder1)
         encoder2 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(encoder2)
@@ -76,7 +75,6 @@ class networks(object):
         merge7 = merge([decoder7, encoder1], mode = 'concat', concat_axis = -1)
         decoder8 = Conv2D(self.gKernels, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(merge7))
         decoder9 = Conv2D(1, 1, activation = 'sigmoid')(decoder8)
-
         model = Model(input = inputs, output = decoder9, name = 'uNet')
         return model
 
@@ -155,17 +153,18 @@ class GAN(object):
         self.rawCols = rawCols
         self.channels = channels
 
-    def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, batchSize = 10, valSplit = 0.2, checkPeriod = 10,
-    lossFuncG = 'mae', lossFuncD = 'binary_crossentropy', lossFuncA1 = 'mae', lossFuncA2 = 'binary_crossentropy', lossRatio = 100, saveFrequency = 5):
+    def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, batchSize = 10, valSplit = 0.2,
+    lossFuncG = 'mae', lossFuncD = 'binary_crossentropy', learningRateG = 1e-4, learningRateD = 1e-6,
+    lossFuncA1 = 'mae', lossFuncA2 = 'binary_crossentropy', lossRatio = 100, saveFrequency = 5):
         network = networks()
         netG = network.uNet()
         netD = network.straight3()
         netA = network.netA()
         netD.trainble = False
-        netA.compile(optimizer = Adam(lr = 1e-4), loss = [lossFuncA1, lossFuncA2], loss_weights = [lossRatio, 1], metrics = ['accuracy'])
+        netA.compile(optimizer = Adam(lr = learningRateG), loss = [lossFuncA1, lossFuncA2], loss_weights = [lossRatio, 1], metrics = ['accuracy'])
         netD.trainable = True
-        netG.compile(optimizer = Adam(lr = 1e-4), loss = lossFuncG, metrics = ['accuracy'])
-        netD.compile(optimizer = Adam(lr = 1e-6), loss = lossFuncD, metrics = ['accuracy'])
+        netG.compile(optimizer = Adam(lr = learningRateG), loss = lossFuncG, metrics = ['accuracy'])
+        netD.compile(optimizer = Adam(lr = learningRateD), loss = lossFuncD, metrics = ['accuracy'])
         extraTrain = dataProc.loadData(inputPath = extraPath, startNum = 0, resize = 1, normalization = 1)
         memTrain = dataProc.loadData(inputPath = memPath, startNum = 0, resize = 1, normalization = 1)
         extraTrain = extraTrain.reshape((extraTrain.shape[0], self.imgRows, self.imgCols, self.channels))
@@ -193,11 +192,12 @@ class GAN(object):
                 lossRecorder[lossCounter, 0] = lossD[0]
                 lossRecorder[lossCounter, 1] = lossA[0]
                 lossCounter += 1
-                msg = 'epoch of ' + '%d'%m + ' batch of ' + '%d'%(n/batchSize) + 'lossD=%f'%lossD[0] + 'lossG=%f'%lossA[0]
-                print(msg + ' lossA.shape is ' + '%d'%len(lossA))
+                msg = 'epoch of ' + '%d '%m + 'batch of ' + '%d '%(n/batchSize) + 'lossD1=%f '%lossD[0] + 'lossD2=%f'%lossD[1] \
+                'lossA1=%f '%lossA[0] + 'lossA2=%f '%lossA[1] + 'lossA3=%f '%lossA[2] + 'lossA4=%f '%lossA[3] + 'lossA5=%f '%lossA[4]
+                print(msg)
                 if (minLossG > lossA[0]):
                     weightsNetGPath = modelPath + 'netG_latest.h5'
-                    netnetG.save_weights(weightsNetGPath, overwrite = True)
+                    netG.save_weights(weightsNetGPath, overwrite = True)
                     minLossG = lossA[0]
                     saveStamp = (m+1, round(n/batchSize+1))
                 '''

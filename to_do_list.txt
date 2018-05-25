@@ -1,7 +1,7 @@
-validate loss
+visualize ecg of a single point
 rotate images
+more iterations
+lr and lossRatio
 pass some parameters using arguments
-
-speed up pseudoECG generator
 
 focal loss of netD
