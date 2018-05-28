@@ -72,8 +72,8 @@ class networks(object):
         merge6 = merge([decoder6, encoder2], mode = 'concat', concat_axis = -1)
         decoder7 = Conv2D(self.gKernels*2, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(merge6))
         decoder7 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(decoder7)
-        merge7 = merge([decoder7, encoder1], mode = 'concat', concat_axis = -1)
-        decoder8 = Conv2D(self.gKernels, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(merge7))
+        #merge7 = merge([decoder7, encoder1], mode = 'concat', concat_axis = -1)
+        decoder8 = Conv2D(self.gKernels, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(decoder7))
         decoder9 = Conv2D(1, 1, activation = 'sigmoid')(decoder8)
         model = Model(input = inputs, output = decoder9, name = 'uNet')
         return model
@@ -193,7 +193,7 @@ class GAN(object):
                 lossRecorder[lossCounter, 1] = lossA[0]
                 lossCounter += 1
                 msg = 'epoch of ' + '%d '%m + 'batch of ' + '%d '%(n/batchSize) + 'lossD1=%f '%lossD[0] + 'lossD2=%f'%lossD[1] \
-                'lossA1=%f '%lossA[0] + 'lossA2=%f '%lossA[1] + 'lossA3=%f '%lossA[2] + 'lossA4=%f '%lossA[3] + 'lossA5=%f '%lossA[4]
+                + 'lossA1=%f '%lossA[0] + 'lossA2=%f '%lossA[1] + 'lossA3=%f '%lossA[2] + 'lossA4=%f '%lossA[3] + 'lossA5=%f '%lossA[4]
                 print(msg)
                 if (minLossG > lossA[0]):
                     weightsNetGPath = modelPath + 'netG_latest.h5'
