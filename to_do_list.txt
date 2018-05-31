@@ -1,4 +1,12 @@
-visualize ecg of a single point
+cut connections(pull)
+
+compile G and D out of A and pass them into A
+
+convert images to other domain
+other generator
+
+save weights depend on validiation
+
 rotate images
 more iterations
 lr and lossRatio
