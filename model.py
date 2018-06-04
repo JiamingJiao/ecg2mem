@@ -180,9 +180,9 @@ class GAN(object):
         netD = network.straight3()
         netA = network.netA(uNetConnections = uNetConnections)
         netD.trainble = False
-        netA.compile(optimizer = Adam(lr = learningRateG), loss = [lossFuncA1, lossFuncA2], loss_weights = [lossRatio, 1], metrics = ['accuracy'])
+        netA.compile(optimizer = Adam(lr = learningRateG), loss = [lossFuncA1, lossFuncA2], loss_weights = [lossRatio, 1], metrics = ['mae', 'accuracy'])
         netD.trainable = True
-        netG.compile(optimizer = Adam(lr = learningRateG), loss = lossFuncG, metrics = ['accuracy'])
+        netG.compile(optimizer = Adam(lr = learningRateG), loss = lossFuncG, metrics = [lossFuncG])
         netD.compile(optimizer = Adam(lr = learningRateD), loss = lossFuncD, metrics = ['accuracy'])
         extraTrain = dataProc.loadData(inputPath = extraPath, startNum = 0, resize = 1, normalization = 1)
         memTrain = dataProc.loadData(inputPath = memPath, startNum = 0, resize = 1, normalization = 1)
