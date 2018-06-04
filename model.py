@@ -52,7 +52,7 @@ class networks(object):
             decoder1 = Conv2D(self.gKernels*8, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(encoder8))
             decoder1 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(decoder1)
             decoder1 = Dropout(0.5)(decoder1)
-            decoder2 = Conv2D(self.gKernels*8, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(decorder1))
+            decoder2 = Conv2D(self.gKernels*8, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(decoder1))
             decoder2 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(decoder2)
             decoder2 = Dropout(0.5)(decoder2)
             decoder3 = Conv2D(self.gKernels*8, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(decoder2))
@@ -174,7 +174,7 @@ class GAN(object):
 
     def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, batchSize = 10, valSplit = 0.2, lossRatio = 100, savingInterval = 50,
     uNetConnections = 1, lossFuncG = 'mae', lossFuncD = 'binary_crossentropy', learningRateG = 1e-4, learningRateD = 1e-6,
-    lossFuncA1 = 'mae', lossFuncA2 = 'binary_crossentropy', ):
+    lossFuncA1 = 'mae', lossFuncA2 = 'binary_crossentropy', netGOnlyEpochs = 25):
         network = networks()
         netG = network.uNet(connections = uNetConnections)
         netD = network.straight3()
@@ -192,12 +192,17 @@ class GAN(object):
         lossCounter = 0
         minLossG = 10000.0
         savingStamp =(0, 0)
-        for m in range(epochsNum):
-            for n in range(0, len(extraTrain), batchSize):
-                if m == 0 and n == 0:
-                    print('begin training')
-                extraLocal = extraTrain[n:n+batchSize, :]
-                memLocal = memTrain[n:n+batchSize, :]
+        weightsNetGPath = modelPath + 'netG_GOnly.h5'
+        checkpointer = ModelCheckpoint(weightsNetGPath, monitor = 'val_loss', verbose = 1, save_best_only = True, save_weights_only = True, mode = 'min')
+        print('begin to train G')
+        netG.fit(x = extraTrain, y = memTrain, batch_size = 10, epochs = netGOnlyEpochs, verbose = 2, callbacks = [checkpointer], validation_split = 0.2)
+        netG.load_weights(weightsNetGPath)
+        for currentEpoch in range(netGOnlyEpochs, epochsNum):
+            for currentBatch in range(0, len(extraTrain), batchSize):
+                if (currentEpoch == netGOnlyEpochs) and (currentBatch == 0):
+                    print('begin to train GAN')
+                extraLocal = extraTrain[currentBatch:currentBatch+batchSize, :]
+                memLocal = memTrain[currentBatch:currentBatch+batchSize, :]
                 memFake = netG.predict_on_batch(extraLocal)
                 extraForD = np.concatenate((extraLocal,extraLocal), axis = 0)
                 realFake = np.concatenate((memLocal,memFake), axis = 0)
@@ -211,15 +216,15 @@ class GAN(object):
                 lossRecorder[lossCounter, 0] = lossD[0]
                 lossRecorder[lossCounter, 1] = lossA[0]
                 lossCounter += 1
-                msg = 'epoch of ' + '%d '%m + 'batch of ' + '%d '%(n/batchSize) + 'lossD1=%f '%lossD[0] + 'lossD2=%f'%lossD[1] \
+                msg = 'epoch of ' + '%d '%(currentEpoch+1) + 'batch of ' + '%d '%(currentBatch/batchSize+1) + 'lossD1=%f '%lossD[0] + 'lossD2=%f'%lossD[1] \
                 + 'lossA1=%f '%lossA[0] + 'lossA2=%f '%lossA[1] + 'lossA3=%f '%lossA[2] + 'lossA4=%f '%lossA[3] + 'lossA5=%f '%lossA[4]
                 print(msg)
                 if (minLossG > lossA[0]):
                     weightsNetGPath = modelPath + 'netG_latest.h5'
                     netG.save_weights(weightsNetGPath, overwrite = True)
                     minLossG = lossA[0]
-                    savingStamp = (m+1, round(n/batchSize+1))
-            if (m % savingInterval == (savingInterval-1)) and (m != epochsNum-1):
+                    savingStamp = (currentEpoch+1, round(currentBatch/batchSize+1))
+            if (currentEpoch % savingInterval == (savingInterval-1)) and (currentEpoch != epochsNum-1):
                 os.rename(modelPath+'netG_latest.h5', modelPath+'netG_%d_epochs.h5'%savingStamp[0])
         np.save(modelPath + 'loss', lossRecorder)
         print('training completed')
