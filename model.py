@@ -150,7 +150,7 @@ class networks(object):
         model = Model(input = inputs, output = probability, name='VGG16')
         return model
 
-    def netA(self, uNetConnections = 1, netDName):
+    def netA(self, uNetConnections = 1, netDName = 'VGG16'):
         inputs = Input((self.imgRows, self.imgCols, self.channels))
         netG = self.uNet(connections = uNetConnections)
         if netDName == 'straight3':
