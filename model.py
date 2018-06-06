@@ -154,7 +154,7 @@ class networks(object):
         model = Model(input = [inputA, inputB], output = probability, name='VGG16')
         return model
 
-    def netA(self, uNetConnections = 1, netDName):
+    def netA(self, uNetConnections = 1, netDName = 'VGG16'):
         inputA = Input((self.imgRows, self.imgCols, self.channels))
         inputB = Input((self.imgRows, self.imgCols, self.channels))
         netG = self.uNet(connections = uNetConnections)
