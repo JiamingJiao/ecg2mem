@@ -154,11 +154,14 @@ class networks(object):
         model = Model(input = [inputA, inputB], output = probability, name='VGG16')
         return model
 
-    def netA(self, uNetConnections = 1):
+    def netA(self, uNetConnections = 1, netDName):
         inputA = Input((self.imgRows, self.imgCols, self.channels))
         inputB = Input((self.imgRows, self.imgCols, self.channels))
         netG = self.uNet(connections = uNetConnections)
-        netD = self.straight3() #You should make change in trainGAN if you change this
+        if netDName == 'straight3':
+            netD = self.straight3() #You should make change in trainGAN if you change this
+        elif netDName == 'VGG16':
+            netD = self.vgg16()
         fakeB = netG(inputA)
         outputD = netD([inputA, fakeB])
         netA = Model(input = [inputA, inputB], output = [fakeB, outputD], name = 'netA')
@@ -174,11 +177,14 @@ class GAN(object):
 
     def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, batchSize = 10, valSplit = 0.2, lossRatio = 100, savingInterval = 50,
     uNetConnections = 1, lossFuncG = 'mae', lossFuncD = 'binary_crossentropy', learningRateG = 1e-4, learningRateD = 1e-6,
-    lossFuncA1 = 'mae', lossFuncA2 = 'binary_crossentropy', netGOnlyEpochs = 25):
+    lossFuncA1 = 'mae', lossFuncA2 = 'binary_crossentropy', netGOnlyEpochs = 25, netDName = 'VGG16'):
         network = networks()
         netG = network.uNet(connections = uNetConnections)
-        netD = network.straight3()
-        netA = network.netA(uNetConnections = uNetConnections)
+        if netDName == 'straight3':
+            netD = network.straight3()
+        elif netDName == 'VGG16':
+            netD = network.vgg16()
+        netA = network.netA(uNetConnections = uNetConnections, netDName = netDName)
         netD.trainble = False
         netA.compile(optimizer = Adam(lr = learningRateG), loss = [lossFuncA1, lossFuncA2], loss_weights = [lossRatio, 1], metrics = ['mae', 'accuracy'])
         netD.trainable = True
