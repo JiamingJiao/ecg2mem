@@ -177,7 +177,7 @@ class GAN(object):
 
     def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, batchSize = 10, valSplit = 0.2, lossRatio = 100, savingInterval = 50,
     uNetConnections = 1, lossFuncG = 'mae', lossFuncD = 'binary_crossentropy', learningRateG = 1e-4, learningRateD = 1e-6,
-    lossFuncA1 = 'mae', lossFuncA2 = 'binary_crossentropy', netGOnlyEpochs = 25, netDName = 'VGG16'):
+    lossFuncA1 = 'mae', lossFuncA2 = 'binary_crossentropy', netGOnlyEpochs = 25, netDName = 'VGG16', continueTrain = False):
         network = networks()
         netG = network.uNet(connections = uNetConnections)
         if netDName == 'straight3':
@@ -199,9 +199,10 @@ class GAN(object):
         minLossG = 10000.0
         savingStamp =(0, 0)
         weightsNetGPath = modelPath + 'netG_GOnly.h5'
-        checkpointer = ModelCheckpoint(weightsNetGPath, monitor = 'val_loss', verbose = 1, save_best_only = True, save_weights_only = True, mode = 'min')
-        print('begin to train G')
-        netG.fit(x = extraTrain, y = memTrain, batch_size = 10, epochs = netGOnlyEpochs, verbose = 2, callbacks = [checkpointer], validation_split = 0.2)
+        if continueTrain == False:
+            checkpointer = ModelCheckpoint(weightsNetGPath, monitor = 'val_loss', verbose = 1, save_best_only = True, save_weights_only = True, mode = 'min')
+            print('begin to train G')
+            netG.fit(x = extraTrain, y = memTrain, batch_size = 10, epochs = netGOnlyEpochs, verbose = 2, callbacks = [checkpointer], validation_split = 0.2)
         netG.load_weights(weightsNetGPath)
         for currentEpoch in range(netGOnlyEpochs, epochsNum):
             for currentBatch in range(0, len(extraTrain), batchSize):
