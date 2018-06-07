@@ -17,7 +17,9 @@ def accuracy(srcPath1, srcPath2, method = 'mae'):
         averageAcc = localAverage/(float(src1.shape[0]))
         return localAverage
 
-acc1 = accuracy('C:/data/makeVideo/dst/20180606_1/png_2/', 'C:/data/makeVideo/dst/20180606_1/png_1/')
+acc1 = accuracy('C:/data/makeVideo/dst/20180604_1/png_2/', 'C:/data/makeVideo/simulation_data/20180308-1/mem/')
 print(acc1)
-acc2 = accuracy('C:/data/makeVideo/dst/20180606_1/png_1/', 'C:/data/makeVideo/simulation_data/20180228-1/mem/')
+acc2 = accuracy('C:/data/makeVideo/dst/20180606_1/png_1/', 'C:/data/makeVideo/simulation_data/20180308-1/mem/')
 print(acc2)
+acc3 = accuracy('C:/data/makeVideo/dst/20180606_2/png_2/', 'C:/data/makeVideo/simulation_data/20180308-1/mem/')
+print(acc3)
