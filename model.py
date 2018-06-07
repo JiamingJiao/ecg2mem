@@ -15,7 +15,7 @@ from keras.layers.advanced_activations import LeakyReLU
 import dataProc
 
 class networks(object):
-    def __init__(self, imgRows = 256, imgCols = 256, rawRows = 200, rawCols = 200, channels = 1, gKernels = 64, dKernels = 64, temporalDepth = 3):
+    def __init__(self, imgRows = 256, imgCols = 256, rawRows = 200, rawCols = 200, channels = 1, gKernels = 64, dKernels = 64, temporalDepth = 5):
         self.imgRows = imgRows
         self.imgCols = imgCols
         self.rawRows = rawRows
@@ -99,33 +99,33 @@ class networks(object):
 
     def uNet3D(self):
         inputs = Input((self.temporalDepth, self.imgRows, self.imgCols, self.channels))
-        encoder1 = Conv3D(filters = self.gKernels, kernel_size = (self.temporalDepth, 4, 4), strides = (0, 2, 2), \
+        encoder1 = Conv3D(filters = self.gKernels, kernel_size = (self.temporalDepth, 4, 4), strides = (1, 2, 2), \
         padding = 'same', kernel_initializer = 'he_normal')(inputs)
-        encoder2 = Conv3D(filters = self.gKernels*2, kernel_size = (self.temporalDepth, 4, 4), strides = (0, 2, 2), \
+        encoder2 = Conv3D(filters = self.gKernels*2, kernel_size = (self.temporalDepth, 4, 4), strides = (1, 2, 2), \
         padding = 'same', kernel_initializer = 'he_normal')(encoder1)
         encoder2 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(encoder2)
         encoder2 = LeakyReLU(alpha = 0.2)(encoder2)
-        encoder3 = Conv3D(filters = self.gKernels*4, kernel_size = (self.temporalDepth, 4, 4), strides = (0, 2, 2), \
+        encoder3 = Conv3D(filters = self.gKernels*4, kernel_size = (self.temporalDepth, 4, 4), strides = (1, 2, 2), \
         padding = 'same', kernel_initializer = 'he_normal')(encoder2)
         encoder3 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(encoder3)
         encoder3 = LeakyReLU(alpha = 0.2)(encoder3)
-        encoder4 = Conv3D(filters = self.gKernels*8, kernel_size = (self.temporalDepth, 4, 4), strides = (0, 2, 2), \
+        encoder4 = Conv3D(filters = self.gKernels*8, kernel_size = (self.temporalDepth, 4, 4), strides = (1, 2, 2), \
         padding = 'same', kernel_initializer = 'he_normal')(encoder3)
         encoder4 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(encoder4)
         encoder4 = LeakyReLU(alpha = 0.2)(encoder4)
-        encoder5 = Conv3D(filters = self.gKernels*8, kernel_size = (self.temporalDepth, 4, 4), strides = (0, 2, 2), \
+        encoder5 = Conv3D(filters = self.gKernels*8, kernel_size = (self.temporalDepth, 4, 4), strides = (1, 2, 2), \
         padding = 'same', kernel_initializer = 'he_normal')(encoder4)
         encoder5 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(encoder5)
         encoder5 = LeakyReLU(alpha = 0.2)(encoder5)
-        encoder6 = Conv3D(filters = self.gKernels*8, kernel_size = (self.temporalDepth, 4, 4), strides = (0, 2, 2), \
+        encoder6 = Conv3D(filters = self.gKernels*8, kernel_size = (self.temporalDepth, 4, 4), strides = (1, 2, 2), \
         padding = 'same', kernel_initializer = 'he_normal')(encoder5)
         encoder6 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(encoder6)
         encoder6 = LeakyReLU(alpha = 0.2)(encoder6)
-        encoder7 = Conv3D(filters = self.gKernels*8, kernel_size = (self.temporalDepth, 4, 4), strides = (0, 2, 2), \
+        encoder7 = Conv3D(filters = self.gKernels*8, kernel_size = (self.temporalDepth, 4, 4), strides = (1, 2, 2), \
         padding = 'same', kernel_initializer = 'he_normal')(encoder6)
         encoder7 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(encoder7)
         encoder7 = LeakyReLU(alpha = 0.2)(encoder7)
-        encoder8 = Conv3D(filters = self.gKernels*8, kernel_size = (self.temporalDepth, 4, 4), strides = (0, 2, 2), \
+        encoder8 = Conv3D(filters = self.gKernels*8, kernel_size = (self.temporalDepth, 4, 4), strides = (1, 2, 2), \
         padding = 'same', kernel_initializer = 'he_normal')(encoder7)
         encoder8 = LeakyReLU(alpha = 0.2)(encoder8)
         decoder1 = Conv3D(self.gKernels*8, kernel_size = (self.temporalDepth, 4, 4), activation = 'relu', \
@@ -243,7 +243,7 @@ class GAN(object):
     def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, batchSize = 10, valSplit = 0.2, lossRatio = 100, savingInterval = 50,
     uNetConnections = 1, lossFuncG = 'mae', lossFuncD = 'binary_crossentropy', learningRateG = 1e-4, learningRateD = 1e-6,
     lossFuncA1 = 'mae', lossFuncA2 = 'binary_crossentropy', netGOnlyEpochs = 25, netGName = 'uNet', temporalDepth = 3):
-        network = networks()
+        network = networks(temporalDepth = temporalDepth)
         if netGName == 'uNet':
             netG = network.uNet(connections = uNetConnections)
         elif netGName == 'uNet3D':
@@ -265,6 +265,8 @@ class GAN(object):
             extraTrain = dataProc.create3DData(extraSequence, temporalDepth = temporalDepth)
             memSequence = dataProc.loadData(inputPath = memPath, startNum = 0, resize = 1, normalization = 1)
             memTrain = dataProc.create3DData(memSequence, temporalDepth = 1)
+            extraTrain = extraTrain.reshape((extraTrain.shape[0], temporalDepth, self.imgRows, self.imgCols, self.channels))
+            memTrain = extraTrain.reshape((memTrain.shape[0],temporalDepth, self.imgRows, self.imgCols, self.channels))
         lossRecorder = np.ndarray((round(extraTrain.shape[0]/batchSize)*epochsNum, 2), dtype = np.float32)
         lossCounter = 0
         minLossG = 10000.0
@@ -272,7 +274,7 @@ class GAN(object):
         weightsNetGPath = modelPath + 'netG_GOnly.h5'
         checkpointer = ModelCheckpoint(weightsNetGPath, monitor = 'val_loss', verbose = 1, save_best_only = True, save_weights_only = True, mode = 'min')
         print('begin to train G')
-        netG.fit(x = extraTrain, y = memTrain, batch_size = 10, epochs = netGOnlyEpochs, verbose = 2, callbacks = [checkpointer], validation_split = 0.2)
+        netG.fit(x = extraTrain, y = memTrain, batch_size = batchSize*2, epochs = netGOnlyEpochs, verbose = 2, callbacks = [checkpointer], validation_split = 0.2)
         netG.load_weights(weightsNetGPath)
         for currentEpoch in range(netGOnlyEpochs, epochsNum):
             for currentBatch in range(0, len(extraTrain), batchSize):
