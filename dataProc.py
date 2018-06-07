@@ -141,3 +141,14 @@ def loadImage(inputPath, startNum = 0, resize = 0, rawRows = 200, rawCols = 200,
         max = np.amax(mergeImg)
         mergeImg = (mergeImg-min)/(max-min)
     return mergeImg
+
+def create3DData(src, temporalDepth):
+    framesNum = src.shape[0]
+    paddingDepth = math.floor((temporalDepth-1)/2 + 0.1)
+    dst = np.zeros((framesNum, temporalDepth, src.shape[1], src.shape[2]), dtype = np.float64)
+    for i in range(0, paddingDepth):
+        dst[i, paddingDepth-i:temporalDepth, :, :] = src[0:temporalDepth-paddingDepth+i, :, :]
+        dst[framesNum-1-i, 0:temporalDepth-paddingDepth+i, :, :] = src[framesNum-(temporalDepth-paddingDepth)-i:framesNum, :, :]
+    for i in range(paddingDepth, framesNum-paddingDepth):
+        dst[i, :, :, :] = src[i-paddingDepth:i+paddingDepth+1, :, :]
+    return dst

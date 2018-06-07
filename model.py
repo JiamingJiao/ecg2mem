@@ -242,7 +242,7 @@ class GAN(object):
 
     def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, batchSize = 10, valSplit = 0.2, lossRatio = 100, savingInterval = 50,
     uNetConnections = 1, lossFuncG = 'mae', lossFuncD = 'binary_crossentropy', learningRateG = 1e-4, learningRateD = 1e-6,
-    lossFuncA1 = 'mae', lossFuncA2 = 'binary_crossentropy', netGOnlyEpochs = 25, netGName = 'uNet'):
+    lossFuncA1 = 'mae', lossFuncA2 = 'binary_crossentropy', netGOnlyEpochs = 25, netGName = 'uNet', temporalDepth = 3):
         network = networks()
         if netGName == 'uNet':
             netG = network.uNet(connections = uNetConnections)
@@ -262,7 +262,9 @@ class GAN(object):
             memTrain = extraTrain.reshape((memTrain.shape[0], self.imgRows, self.imgCols, self.channels))
         elif netGName == 'uNet3D':
             extraSequence = dataProc.loadData(inputPath = extraPath, startNum = 0, resize = 1, normalization = 1)
+            extraTrain = dataProc.create3DData(extraSequence, temporalDepth = temporalDepth)
             memSequence = dataProc.loadData(inputPath = memPath, startNum = 0, resize = 1, normalization = 1)
+            memTrain = dataProc.create3DData(memSequence, temporalDepth = 1)
         lossRecorder = np.ndarray((round(extraTrain.shape[0]/batchSize)*epochsNum, 2), dtype = np.float32)
         lossCounter = 0
         minLossG = 10000.0
