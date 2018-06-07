@@ -13,7 +13,7 @@ def accuracy(srcPath1, srcPath2, method = 'mae'):
             absDiff = cv.absdiff(src1[i, :, :], src2[i, :, :])
             #percentageArray = cv.divide(absDiff+0.001, src2[i, :, :]+0.001)
             sum = cv.sumElems(absDiff)
-            localAverage = sum[0]/(imgRows*imgCols)
+            localAverage += sum[0]/(imgRows*imgCols)
         averageAcc = localAverage/(float(src1.shape[0]))
         return localAverage
 
