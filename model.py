@@ -199,6 +199,7 @@ class GAN(object):
         minLossG = 10000.0
         savingStamp =(0, 0)
         weightsNetGPath = modelPath + 'netG_GOnly.h5'
+        weightsNetAPath = modelPath + 'netA_latest.h5'
         if continueTrain == False:
             checkpointer = ModelCheckpoint(weightsNetGPath, monitor = 'val_loss', verbose = 1, save_best_only = True, save_weights_only = True, mode = 'min')
             print('begin to train G')
@@ -229,6 +230,7 @@ class GAN(object):
                 if (minLossG > lossA[0]):
                     weightsNetGPath = modelPath + 'netG_latest.h5'
                     netG.save_weights(weightsNetGPath, overwrite = True)
+                    netA.save_weights(weightsNetAPath, overwrite = True)
                     minLossG = lossA[0]
                     savingStamp = (currentEpoch+1, round(currentBatch/batchSize+1))
             if (currentEpoch % savingInterval == (savingInterval-1)) and (currentEpoch != epochsNum-1):
