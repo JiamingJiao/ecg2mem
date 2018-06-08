@@ -222,10 +222,13 @@ class networks(object):
         model = Model(input = [inputA, inputB], output = probability, name='VGG16')
         return model
 
-    def netA(self, uNetConnections = 1):
+    def netA(self, uNetConnections = 1, netGName = 'uNet', netDName = 'VGG16'):
         inputA = Input((self.imgRows, self.imgCols, self.channels))
         inputB = Input((self.imgRows, self.imgCols, self.channels))
-        netG = self.uNet(connections = uNetConnections)
+        if netGName == 'uNet':
+            netG = network.uNet(connections = uNetConnections)
+        elif netGName == 'uNet3D':
+            netG = network.uNet3D()
         netD = self.straight3() #You should make change in trainGAN if you change this
         fakeB = netG(inputA)
         outputD = netD([inputA, fakeB])
