@@ -1,3 +1,7 @@
+check what is wrong in model_master, dose not continue training after netG.fit
+
+3D uNet
+
 save weights depend on validiation
 
 compile G and D out of A and pass them into A
@@ -8,6 +12,5 @@ other generator
 rotate images
 more iterations
 lr and lossRatio
-pass some parameters using arguments
 
 focal loss of netD
