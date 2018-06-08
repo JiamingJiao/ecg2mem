@@ -98,10 +98,8 @@ class networks(object):
         return model
 
     def straight3(self):
-        inputA = Input((self.imgRows, self.imgCols, self.channels))
-        inputB = Input((self.imgRows, self.imgCols, self.channels))
-        combinedImg = merge([inputA, inputB], mode = 'concat', concat_axis = -1)
-        conv1 = Conv2D(self.dKernels, 3, padding = 'same', kernel_initializer = 'he_normal')(combinedImg)
+        inputs = Input((self.imgRows, self.imgCols, self.channels))
+        conv1 = Conv2D(self.dKernels, 3, padding = 'same', kernel_initializer = 'he_normal')(inputs)
         pool1 = MaxPooling2D((4, 4))(conv1)
         conv1 = LeakyReLU(alpha = 0.2)(pool1)
         conv2 = Conv2D(self.dKernels*2, 3, padding = 'same', kernel_initializer = 'he_normal')(pool1)
@@ -120,14 +118,12 @@ class networks(object):
         dense5 = LeakyReLU(alpha = 0.2)(dense5)
         drop5 = Dropout(0.5)(dense5)
         probability = Dense(2, activation = 'softmax')(drop5)
-        model = Model(input = [inputA, inputB], output = probability, name='straight3')
+        model = Model(input = inputs, output = probability, name='straight3')
         return model
 
     def vgg16(self):
-        inputA = Input((self.imgRows, self.imgCols, self.channels))
-        inputB = Input((self.imgRows, self.imgCols, self.channels))
-        combinedImg = merge([inputA, inputB], mode = 'concat', concat_axis = -1)
-        conv1 = Conv2D(self.dKernels, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(combinedImg)
+        inputs = Input((self.imgRows, self.imgCols, self.channels))
+        conv1 = Conv2D(self.dKernels, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(inputs)
         conv1 = Conv2D(self.dKernels, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv1)
         pool1 = MaxPooling2D((2, 2))(conv1)
         conv2 = Conv2D(self.dKernels*2, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(pool1)
@@ -151,20 +147,19 @@ class networks(object):
         dense7 = Dense(self.dKernels*64, activation = 'relu')(drop6)
         drop7 = Dropout(0.5)(dense7)
         probability = Dense(2, activation = 'softmax')(drop7)
-        model = Model(input = [inputA, inputB], output = probability, name='VGG16')
+        model = Model(input = inputs, output = probability, name='VGG16')
         return model
 
     def netA(self, uNetConnections = 1, netDName = 'VGG16'):
-        inputA = Input((self.imgRows, self.imgCols, self.channels))
-        inputB = Input((self.imgRows, self.imgCols, self.channels))
+        inputs = Input((self.imgRows, self.imgCols, self.channels))
         netG = self.uNet(connections = uNetConnections)
         if netDName == 'straight3':
             netD = self.straight3() #You should make change in trainGAN if you change this
         elif netDName == 'VGG16':
             netD = self.vgg16()
-        fakeB = netG(inputA)
-        outputD = netD([inputA, fakeB])
-        netA = Model(input = [inputA, inputB], output = [fakeB, outputD], name = 'netA')
+        fakeB = netG(inputs)
+        outputD = netD(fakeB)
+        netA = Model(input = inputs, output = [fakeB, outputD], name = 'netA')
         return netA
 
 class GAN(object):
@@ -212,15 +207,14 @@ class GAN(object):
                 extraLocal = extraTrain[currentBatch:currentBatch+batchSize, :]
                 memLocal = memTrain[currentBatch:currentBatch+batchSize, :]
                 memFake = netG.predict_on_batch(extraLocal)
-                extraForD = np.concatenate((extraLocal,extraLocal), axis = 0)
                 realFake = np.concatenate((memLocal,memFake), axis = 0)
                 labelD = np.zeros((batchSize*2, 2), dtype = np.float64)
                 labelD[0:batchSize, 0] = 1
                 labelD[batchSize:batchSize*2, 1] = 1
-                lossD = netD.train_on_batch([extraForD, realFake], labelD)
+                lossD = netD.train_on_batch(realFake, labelD)
                 labelA = np.ones((batchSize, 2), dtype = np.float64) #to fool the netD
                 labelA[:, 1] = 0
-                lossA = netA.train_on_batch([extraLocal, memLocal], [memLocal, labelA])
+                lossA = netA.train_on_batch(extraLocal, [memLocal, labelA])
                 lossRecorder[lossCounter, 0] = lossD[0]
                 lossRecorder[lossCounter, 1] = lossA[0]
                 lossCounter += 1
