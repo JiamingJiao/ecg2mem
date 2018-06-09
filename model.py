@@ -15,17 +15,15 @@ from keras.layers.advanced_activations import LeakyReLU
 import dataProc
 
 class networks(object):
-    def __init__(self, imgRows = 256, imgCols = 256, rawRows = 200, rawCols = 200, channels = 1, gKernels = 64, dKernels = 64, temporalDepth = 5):
+    def __init__(self, imgRows = None, imgCols = None, channels = None, gKernels = 64, dKernels = 64, temporalDepth = None):
         self.imgRows = imgRows
         self.imgCols = imgCols
-        self.rawRows = rawRows
-        self.rawCols = rawCols
         self.channels = channels
         self.gKernels = gKernels
         self.dKernels = dKernels
         self.temporalDepth = temporalDepth
 
-    def uNet(self, connections = 1):
+    def uNet(self, connections):
         inputs = Input((self.imgRows, self.imgCols, self.channels))
         encoder1 = Conv2D(self.gKernels, 4, strides = 2, padding = 'same', kernel_initializer = 'he_normal')(inputs)
         encoder2 = Conv2D(self.gKernels*2, 4, strides = 2, padding = 'same', kernel_initializer = 'he_normal')(encoder1)
@@ -218,47 +216,40 @@ class networks(object):
         model = Model(input = inputs, output = probability, name='VGG16')
         return model
 
-    def netA(self, uNetConnections = 1, netGName = 'uNet', netDName = 'VGG16'):
-        inputs = Input((self.imgRows, self.imgCols, self.channels))
-        if netGName == 'uNet':
-            netG = network.uNet(connections = uNetConnections)
-        elif netGName == 'uNet3D':
-            netG = network.uNet3D()
-        if netDName == 'straight3':
-            netD = self.straight3() #You should make change in trainGAN if you change this
-        elif netDName == 'VGG16':
-            netD = self.vgg16()
-        fakeB = netG(inputs)
-        outputD = netD(fakeB)
-        netA = Model(input = inputs, output = [fakeB, outputD], name = 'netA')
-        return netA
-
 class GAN(object):
-    def __init__(self, imgRows = 256, imgCols = 256, rawRows = 200, rawCols = 200, channels = 1):
+    def __init__(self, imgRows = 256, imgCols = 256, rawRows = 200, rawCols = 200, channels = 1, netDName = None, netGName = None, temporalDepth = None, uNetConnections = 1,
+    lossFuncD = 'binary_crossentropy', lossFuncG = 'mae', optimizerG = 'Adam', lossRatio = 100, learningRateG = 1e-4, learningRateD = 1e-4):
         self.imgRows = imgRows
         self.imgCols = imgCols
         self.rawRows = rawRows
         self.rawCols = rawCols
         self.channels = channels
+        self.temporalDepth = temporalDepth
+        self.netGName = netGName
+        self.netDName = netDName
+        self.lossFuncG = lossFuncG
+        self.network = networks(imgRows = self.imgRows, imgCols = self.imgCols, channels = self.channels, temporalDepth = self.temporalDepth)
+        if netGName = 'uNet':
+            self.netG = self.network.uNet(connections = uNetConnections)
+            inputs = Input((self.imgRows, self.imgCols, self.channels))
+        elif netGName = 'uNet3D':
+            self.netG = self.network.uNet3D()
+            inputs = Input((self.temporalDepth, self.imgRows, self.imgCols, self.channels))
+        if netDName = 'straight3':
+            self.netD = self.network.straight3()
+        elif netDName = 'VGG16':
+            self.netD = self.network.vgg16()
+        outputG = self.netG(inputs)
+        outputD = self.netD(outputG)
+        self.netA = Model(input = inputs, output =[outputG, outputD], name = 'netA')
+        self.netD.compile(optimizer = Adam(lr = learningRateD), loss = lossFuncD, metrics = [lossFuncD])
+        self.netD.trainable = False
+        if optimizerG = 'Adam':
+            self.netA.compile(optimizer = Adam(lr = learningRateG), loss = [lossFuncG, lossFuncD], loss_weights = [lossRatio, 1], metrics = [lossFuncG, lossFuncD])
+        print(self.netA.metrcs_names)
 
-    def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, batchSize = 10, valSplit = 0.2, lossRatio = 100, savingInterval = 50,
-    uNetConnections = 1, lossFuncG = 'mae', lossFuncD = 'binary_crossentropy', learningRateG = 1e-4, learningRateD = 1e-6,
-    lossFuncA1 = 'mae', lossFuncA2 = 'binary_crossentropy', netGOnlyEpochs = 25, netGName = 'uNet', temporalDepth = 3, netDName = 'VGG16', continueTrain = False):
-        network = networks(temporalDepth = temporalDepth)
-        if netGName == 'uNet':
-            netG = network.uNet(connections = uNetConnections)
-        elif netGName == 'uNet3D':
-            netG = network.uNet3D()
-        if netDName == 'straight3':
-            netD = network.straight3()
-        elif netDName == 'VGG16':
-            netD = network.vgg16()
-        netA = network.netA(uNetConnections = uNetConnections, netDName = netDName)
-        netD.trainble = False
-        netA.compile(optimizer = Adam(lr = learningRateG), loss = [lossFuncA1, lossFuncA2], loss_weights = [lossRatio, 1], metrics = ['mae', 'accuracy'])
-        netD.trainable = True
-        netG.compile(optimizer = Adam(lr = learningRateG), loss = lossFuncG, metrics = [lossFuncG])
-        netD.compile(optimizer = Adam(lr = learningRateD), loss = lossFuncD, metrics = ['accuracy'])
+    def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, batchSize = 10, valSplit = 0.2, savingInterval = 50, netGOnlyEpochs = 25, continueTrain = False,
+    preTrainedGPath = None):
         if netGName == 'uNet':
             extraTrain = dataProc.loadData(inputPath = extraPath, startNum = 0, resize = 1, normalization = 1)
             memTrain = dataProc.loadData(inputPath = memPath, startNum = 0, resize = 1, normalization = 1)
@@ -278,25 +269,27 @@ class GAN(object):
         weightsNetGPath = modelPath + 'netG_GOnly.h5'
         weightsNetAPath = modelPath + 'netA_latest.h5'
         if continueTrain == False:
+            self.netG.compile(optimizer = Adam(lr = learningRateG), loss = self.lossFuncG, metrics = [self.lossFuncG])
             checkpointer = ModelCheckpoint(weightsNetGPath, monitor = 'val_loss', verbose = 1, save_best_only = True, save_weights_only = True, mode = 'min')
             print('begin to train G')
-            netG.fit(x = extraTrain, y = memTrain, batch_size = 10, epochs = netGOnlyEpochs, verbose = 2, callbacks = [checkpointer], validation_split = 0.2)
-        netG.load_weights(weightsNetGPath)
+            self.netG.fit(x = extraTrain, y = memTrain, batch_size = 10, epochs = netGOnlyEpochs, verbose = 2, callbacks = [checkpointer], validation_split = 0.2)
+        elif continueTrain == True:
+            self.netG.load_weights(preTrainedGPath)
         for currentEpoch in range(netGOnlyEpochs, epochsNum):
             for currentBatch in range(0, len(extraTrain), batchSize):
                 if (currentEpoch == netGOnlyEpochs) and (currentBatch == 0):
                     print('begin to train GAN')
                 extraLocal = extraTrain[currentBatch:currentBatch+batchSize, :]
                 memLocal = memTrain[currentBatch:currentBatch+batchSize, :]
-                memFake = netG.predict_on_batch(extraLocal)
+                memFake = self.netG.predict_on_batch(extraLocal)
                 realFake = np.concatenate((memLocal,memFake), axis = 0)
                 labelD = np.zeros((batchSize*2, 2), dtype = np.float64)
                 labelD[0:batchSize, 0] = 1
                 labelD[batchSize:batchSize*2, 1] = 1
-                lossD = netD.train_on_batch(realFake, labelD)
+                lossD = self.netD.train_on_batch(realFake, labelD)
                 labelA = np.ones((batchSize, 2), dtype = np.float64) #to fool the netD
                 labelA[:, 1] = 0
-                lossA = netA.train_on_batch(extraLocal, [memLocal, labelA])
+                lossA = self.netA.train_on_batch(extraLocal, [memLocal, labelA])
                 lossRecorder[lossCounter, 0] = lossD[0]
                 lossRecorder[lossCounter, 1] = lossA[0]
                 lossCounter += 1
@@ -305,8 +298,8 @@ class GAN(object):
                 print(msg)
                 if (minLossG > lossA[0]):
                     weightsNetGPath = modelPath + 'netG_latest.h5'
-                    netG.save_weights(weightsNetGPath, overwrite = True)
-                    netA.save_weights(weightsNetAPath, overwrite = True)
+                    self.netG.save_weights(weightsNetGPath, overwrite = True)
+                    #netA.save_weights(weightsNetAPath, overwrite = True)
                     minLossG = lossA[0]
                     savingStamp = (currentEpoch+1, round(currentBatch/batchSize+1))
             if (currentEpoch % savingInterval == (savingInterval-1)) and (currentEpoch != epochsNum-1):
