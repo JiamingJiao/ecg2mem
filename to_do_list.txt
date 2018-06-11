@@ -1,10 +1,9 @@
+shape of last layer in 3d unet
 check what is wrong in model_master, dose not continue training after netG.fit
 
-3D uNet
+3D in loadData
 
 save weights depend on validiation
-
-compile G and D out of A and pass them into A
 
 convert images to other domain
 other generator
