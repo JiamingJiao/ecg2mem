@@ -7,7 +7,7 @@ import os
 import glob
 import keras
 from keras.models import *
-from keras.layers import Input, merge, Conv2D, UpSampling2D, Dropout, BatchNormalization, Flatten, Dense, MaxPooling2D, Conv3D, UpSampling3D, MaxPooling3D
+from keras.layers import Input, merge, Conv2D, UpSampling2D, Dropout, BatchNormalization, Flatten, Dense, MaxPooling2D, Conv3D, UpSampling3D, MaxPooling3D, Reshape
 from keras.optimizers import *
 from keras.callbacks import ModelCheckpoint, LearningRateScheduler
 from keras import backend
@@ -159,8 +159,11 @@ class networks(object):
         merge7 = merge([decoder7, encoder1], mode = 'concat', concat_axis = -1)
         decoder8 = Conv3D(self.gKernels, kernel_size = (self.temporalDepth, 4, 4), activation = 'relu', \
         padding = 'same', kernel_initializer = 'he_normal')(UpSampling3D(size = (1,2,2))(merge7))
-        decoder9 = Conv3D(1, 1, activation = 'sigmoid')(decoder8)
-        model = Model(input = inputs, output = decoder9, name = 'uNet3D')
+        #decoder9 = Conv3D(1, 1, activation = 'sigmoid')(decoder8)
+        decoder9 = Conv3D(1, kernel_size = (self.temporalDepth, 4, 4), activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(decoder8)
+        decoder9 = Reshape((self.imgRows, self.imgCols, self.temporalDepth))(decoder9)
+        decoder10 = Conv2D(1, 1, activation = 'sigmoid')(decoder9)
+        model = Model(input = inputs, output = decoder10, name = 'uNet3D')
         return model
 
     def straight3(self):
