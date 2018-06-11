@@ -101,3 +101,4 @@ ENV/
 # my config
 *.autosave
 script.py
+to_do_list.txt
