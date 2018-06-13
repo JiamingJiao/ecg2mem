@@ -247,15 +247,17 @@ class GAN(object):
             self.netD = self.network.straight3()
         elif self.netDName == 'VGG16':
             self.netD = self.network.vgg16()
-        self.netD.summary()
+        self.netD.trainable = False
         outputG = self.netG(inputs)
         outputD = self.netD(outputG)
         self.netA = Model(input = inputs, output =[outputG, outputD], name = 'netA')
-        self.netA.summary
-        self.netD.compile(optimizer = Adam(lr = self.learningRateD), loss = lossFuncD, metrics = [lossFuncD])
-        self.netD.trainable = False
+        self.netA.summary()
         if optimizerG == 'Adam':
-            self.netA.compile(optimizer = Adam(lr = self.learningRateG), loss = [lossFuncG, lossFuncD], loss_weights = [lossRatio, 1], metrics = [lossFuncG, lossFuncD])
+            self.netA.compile(optimizer = Adam(lr = self.learningRateG), loss = [lossFuncG, lossFuncD],
+            loss_weights = [lossRatio, 1], metrics = [lossFuncG, lossFuncD])
+        self.netD.trainable = True
+        self.netD.summary()
+        self.netD.compile(optimizer = Adam(lr = self.learningRateD), loss = lossFuncD, metrics = [lossFuncD])
         print(self.netA.metrics_names)
 
     def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, batchSize = 10, valSplit = 0.2, savingInterval = 50, netGOnlyEpochs = 25, continueTrain = False,
@@ -282,6 +284,7 @@ class GAN(object):
             print('begin to train G')
             self.netG.fit(x = extraTrain, y = memTrain, batch_size = batchSize*2, epochs = netGOnlyEpochs, verbose = 2, callbacks = [checkpointer], validation_split = 0.2)
         elif continueTrain == True:
+            preTrainedGPath = preTrainedGPath + 'netG_GOnly.h5'
             self.netG.load_weights(preTrainedGPath)
         for currentEpoch in range(netGOnlyEpochs, epochsNum):
             for currentBatch in range(0, len(extraTrain), batchSize):

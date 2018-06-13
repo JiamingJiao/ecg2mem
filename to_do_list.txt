@@ -1,5 +1,4 @@
-shape of last layer in 3d unet
-check what is wrong in model_master, dose not continue training after netG.fit
+activation func of the last layer in G
 
 3D in loadData
 

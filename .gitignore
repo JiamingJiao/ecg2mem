@@ -102,3 +102,4 @@ ENV/
 *.autosave
 script.py
 to_do_list.txt
+*.ipynb
