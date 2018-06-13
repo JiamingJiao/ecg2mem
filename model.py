@@ -6,6 +6,7 @@ import cv2 as cv
 import os
 import glob
 import keras
+import math
 import tensorflow as tf
 from keras.models import *
 from keras.layers import Input, merge, Conv2D, UpSampling2D, Dropout, BatchNormalization, Flatten, Dense, MaxPooling2D
@@ -93,7 +94,7 @@ class networks(object):
             decoder7 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(decoder7)
             merge7 = merge([decoder7, encoder1], mode = 'concat', concat_axis = -1)
             decoder8 = Conv2D(self.gKernels, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(merge7))
-        decoder9 = Conv2D(1, 1, activation = 'sigmoid')(decoder8)
+        decoder9 = Conv2D(1, 1, activation = 'tanh')(decoder8)
         model = Model(input = inputs, output = decoder9, name = 'uNet')
         return model
 
@@ -163,7 +164,7 @@ class networks(object):
         padding = 'same', kernel_initializer = 'he_normal')(UpSampling3D(size = (1,2,2))(merge7))
         #decoder9 = Conv3D(1, 1, activation = 'sigmoid')(decoder8)
         decoder9 = Conv3D(1, kernel_size = (self.temporalDepth, 4, 4), activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(decoder8)        
-        decoder10 =Conv3D(1, kernel_size = (self.temporalDepth, 1, 1), activation = 'sigmoid', padding = 'valid', kernel_initializer = 'he_normal')(decoder9)
+        decoder10 =Conv3D(1, kernel_size = (self.temporalDepth, 1, 1), activation = 'tanh', padding = 'valid', kernel_initializer = 'he_normal')(decoder9)
         squeezed10 = Lambda(squeeze, output_shape = (self.imgRows, self.imgCols, self.channels))(decoder10)
         model = Model(input = inputs, output = squeezed10, name = 'uNet3D')
         return model
@@ -193,7 +194,7 @@ class networks(object):
         return model
 
     def vgg16(self):
-        inputs = Input((self.imgRows, self.imgCols, self.channels))
+        inputs = Input((self.imgRows, self.imgCols, self.channels*2))
         conv1 = Conv2D(self.dKernels, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(inputs)
         conv1 = Conv2D(self.dKernels, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv1)
         pool1 = MaxPooling2D((2, 2))(conv1)
@@ -236,20 +237,25 @@ class GAN(object):
         self.learningRateG = learningRateG
         self.learningRateD = learningRateD
         self.network = networks(imgRows = self.imgRows, imgCols = self.imgCols, channels = self.channels, temporalDepth = self.temporalDepth)
-        if self.netGName == 'uNet':
-            self.netG = self.network.uNet(connections = uNetConnections)
-            inputs = Input((self.imgRows, self.imgCols, self.channels))
-        elif self.netGName == 'uNet3D':
-            self.netG = self.network.uNet3D()
-            inputs = Input((self.temporalDepth, self.imgRows, self.imgCols, self.channels))
-        self.netG.summary()
         if self.netDName == 'straight3':
             self.netD = self.network.straight3()
         elif self.netDName == 'VGG16':
             self.netD = self.network.vgg16()
         self.netD.trainable = False
-        outputG = self.netG(inputs)
-        outputD = self.netD(outputG)
+        if self.netGName == 'uNet':
+            self.netG = self.network.uNet(connections = uNetConnections)
+            inputs = Input((self.imgRows, self.imgCols, self.channels))
+            outputG = self.netG(inputs)
+            inputD = merge([inputs, outputG], mode = 'concat', concat_axis = -1)
+        elif self.netGName == 'uNet3D':
+            self.netG = self.network.uNet3D()
+            inputs = Input((self.temporalDepth, self.imgRows, self.imgCols, self.channels))
+            outputG = self.netG(inputs)
+            middleLayerOfInputs = Lambda(slice, output_shape = (1, self.imgRows, self.imgCols, self.channels))(inputs)
+            middleLayerOfInputs = Lambda(squeeze, output_shape = (self.imgRows, self.imgCols, self.channels))(middleLayerOfInputs)
+            inputD = merge([middleLayerOfInputs, outputG], mode = 'concat', concat_axis = -1)
+        self.netG.summary()
+        outputD = self.netD(inputD)
         self.netA = Model(input = inputs, output =[outputG, outputD], name = 'netA')
         self.netA.summary()
         if optimizerG == 'Adam':
@@ -270,7 +276,7 @@ class GAN(object):
             extraTrain = dataProc.create3DData(extraSequence, temporalDepth = self.temporalDepth)
             extraTrain = extraTrain.reshape((extraTrain.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels))            
         memTrain = dataProc.loadData(inputPath = memPath, startNum = 0, resize = 1, normalization = 1)
-        memTrain = extraTrain.reshape((memTrain.shape[0], self.imgRows, self.imgCols, self.channels))
+        memTrain = memTrain.reshape((memTrain.shape[0], self.imgRows, self.imgCols, self.channels))
         print(extraTrain.shape)
         lossRecorder = np.ndarray((round(extraTrain.shape[0]/batchSize)*epochsNum, 2), dtype = np.float32)
         lossCounter = 0
@@ -293,11 +299,13 @@ class GAN(object):
                 extraLocal = extraTrain[currentBatch:currentBatch+batchSize, :]
                 memLocal = memTrain[currentBatch:currentBatch+batchSize, :]
                 memFake = self.netG.predict_on_batch(extraLocal)
-                realFake = np.concatenate((memLocal,memFake), axis = 0)
+                realAndFake = np.concatenate((memLocal,memFake), axis = 0)
+                extraForD = np.concatenate((extraLocal, extraLocal), axis = 0)
+                extraAndMem = np.concatenate((extraForD, realAndFake), axis = -1)
                 labelD = np.zeros((batchSize*2, 2), dtype = np.float64)
                 labelD[0:batchSize, 0] = 1
                 labelD[batchSize:batchSize*2, 1] = 1
-                lossD = self.netD.train_on_batch(realFake, labelD)
+                lossD = self.netD.train_on_batch(extraAndMem, labelD)
                 labelA = np.ones((batchSize, 2), dtype = np.float64) #to fool the netD
                 labelA[:, 1] = 0
                 lossA = self.netA.train_on_batch(extraLocal, [memLocal, labelA])
@@ -307,11 +315,11 @@ class GAN(object):
                 msg = 'epoch of ' + '%d '%(currentEpoch+1) + 'batch of ' + '%d '%(currentBatch/batchSize+1) + 'lossD1=%f '%lossD[0] + 'lossD2=%f'%lossD[1] \
                 + 'lossA1=%f '%lossA[0] + 'lossA2=%f '%lossA[1] + 'lossA3=%f '%lossA[2] + 'lossA4=%f '%lossA[3] + 'lossA5=%f '%lossA[4]
                 print(msg)
-                if (minLossG > lossA[0]):
+                if (minLossG > lossA[3]):
                     weightsNetGPath = modelPath + 'netG_latest.h5'
                     self.netG.save_weights(weightsNetGPath, overwrite = True)
                     #netA.save_weights(weightsNetAPath, overwrite = True)
-                    minLossG = lossA[0]
+                    minLossG = lossA[3]
                     savingStamp = (currentEpoch+1, round(currentBatch/batchSize+1))
             if (currentEpoch % savingInterval == (savingInterval-1)) and (currentEpoch != epochsNum-1):
                 os.rename(modelPath+'netG_latest.h5', modelPath+'netG_%d_epochs.h5'%savingStamp[0])
@@ -319,6 +327,13 @@ class GAN(object):
         print('training completed')
 
 def squeeze(src):
-    srcShape = tf.shape(src)
     dst = tf.squeeze(src, [1])
+    return dst
+
+def slice(src):
+    srcShape = src.shape.as_list()
+    middleLayer = math.floor(srcShape[1]/2.0)
+    dst = tf.slice(src, [0, middleLayer, 0, 0, 0], [-1, 1, -1, -1, -1])
+    print(srcShape)
+    print(dst.shape)
     return dst
