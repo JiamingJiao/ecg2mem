@@ -167,6 +167,7 @@ class networks(object):
         decoder10 =Conv3D(1, kernel_size = (self.temporalDepth, 1, 1), activation = 'tanh', padding = 'valid', kernel_initializer = 'he_normal')(decoder9)
         squeezed10 = Lambda(squeeze, output_shape = (self.imgRows, self.imgCols, self.channels))(decoder10)
         model = Model(input = inputs, output = squeezed10, name = 'uNet3D')
+        model.summary()
         return model
 
     def straight3(self):
@@ -239,32 +240,33 @@ class GAN(object):
         self.network = networks(imgRows = self.imgRows, imgCols = self.imgCols, channels = self.channels, temporalDepth = self.temporalDepth)
         if self.netDName == 'straight3':
             self.netD = self.network.straight3()
+            self.netDA = self.network.straight3()
         elif self.netDName == 'VGG16':
             self.netD = self.network.vgg16()
-        self.netD.trainable = False
+            self.netDA = self.network.vgg16()
+        self.netDA.trainable = False
         if self.netGName == 'uNet':
             self.netG = self.network.uNet(connections = uNetConnections)
-            inputs = Input((self.imgRows, self.imgCols, self.channels))
-            outputG = self.netG(inputs)
-            inputD = merge([inputs, outputG], mode = 'concat', concat_axis = -1)
+            inputsA = Input((self.imgRows, self.imgCols, self.channels))
+            outputG = self.netG(inputsA)
+            inputD = merge([inputsA, outputG], mode = 'concat', concat_axis = -1)
         elif self.netGName == 'uNet3D':
             self.netG = self.network.uNet3D()
-            inputs = Input((self.temporalDepth, self.imgRows, self.imgCols, self.channels))
-            outputG = self.netG(inputs)
-            middleLayerOfInputs = Lambda(slice, output_shape = (1, self.imgRows, self.imgCols, self.channels))(inputs)
+            inputsA = Input((self.temporalDepth, self.imgRows, self.imgCols, self.channels))
+            outputG = self.netG(inputsA)
+            middleLayerOfInputs = Lambda(slice, output_shape = (1, self.imgRows, self.imgCols, self.channels))(inputsA)
             middleLayerOfInputs = Lambda(squeeze, output_shape = (self.imgRows, self.imgCols, self.channels))(middleLayerOfInputs)
             inputD = merge([middleLayerOfInputs, outputG], mode = 'concat', concat_axis = -1)
-        self.netG.summary()
-        outputD = self.netD(inputD)
-        self.netA = Model(input = inputs, output =[outputG, outputD], name = 'netA')
+        outputD = self.netDA(inputD)
+        self.netA = Model(input = inputsA, output =[outputG, outputD], name = 'netA')
         self.netA.summary()
         if optimizerG == 'Adam':
             self.netA.compile(optimizer = Adam(lr = self.learningRateG), loss = {self.netGName:lossFuncG, self.netDName:lossFuncD},
             loss_weights = [lossRatio, 1], metrics = {self.netGName:lossFuncG, self.netDName:lossFuncD})
-        self.netD.trainable = True
-        self.netD.summary()
         self.netD.compile(optimizer = Adam(lr = self.learningRateD), loss = lossFuncD, metrics = [lossFuncD])
         print(self.netA.metrics_names)
+        self.netD.summary()
+        self.netDA.summary()
 
     def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, batchSize = 10, valSplit = 0.2, savingInterval = 50, netGOnlyEpochs = 25, continueTrain = False,
     preTrainedGPath = None):
@@ -308,6 +310,7 @@ class GAN(object):
                 labelD[0:batchSize, 0] = 1
                 labelD[batchSize:batchSize*2, 1] = 1
                 lossD = self.netD.train_on_batch(extraAndMem, labelD)
+                self.netDA.set_weights(self.netD.get_weights())
                 labelA = np.ones((batchSize, 2), dtype = np.float64) #to fool the netD
                 labelA[:, 1] = 0
                 lossA = self.netA.train_on_batch(extraLocal, [memLocal, labelA])
