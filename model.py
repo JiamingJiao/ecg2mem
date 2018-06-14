@@ -269,12 +269,14 @@ class GAN(object):
     def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, batchSize = 10, valSplit = 0.2, savingInterval = 50, netGOnlyEpochs = 25, continueTrain = False,
     preTrainedGPath = None):
         if self.netGName == 'uNet':
-            extraTrain = dataProc.loadData(inputPath = extraPath, startNum = 0, resize = 1, normalization = 1)
-            extraTrain = extraTrain.reshape((extraTrain.shape[0], self.imgRows, self.imgCols, self.channels))
+            extraSequence = dataProc.loadData(inputPath = extraPath, startNum = 0, resize = 1, normalization = 1)
+            extraSequence = extraSequence.reshape((extraSequence.shape[0], self.imgRows, self.imgCols, self.channels))
+            extraTrain = extraSequence
         elif self.netGName == 'uNet3D':
             extraSequence = dataProc.loadData(inputPath = extraPath, startNum = 0, resize = 1, normalization = 1)
             extraTrain = dataProc.create3DData(extraSequence, temporalDepth = self.temporalDepth)
-            extraTrain = extraTrain.reshape((extraTrain.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels))            
+            extraTrain = extraTrain.reshape((extraTrain.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels))
+            extraSequence = extraSequence.reshape((extraSequence.shape[0], self.imgRows, self.imgCols, self.channels))
         memTrain = dataProc.loadData(inputPath = memPath, startNum = 0, resize = 1, normalization = 1)
         memTrain = memTrain.reshape((memTrain.shape[0], self.imgRows, self.imgCols, self.channels))
         print(extraTrain.shape)
@@ -300,7 +302,7 @@ class GAN(object):
                 memLocal = memTrain[currentBatch:currentBatch+batchSize, :]
                 memFake = self.netG.predict_on_batch(extraLocal)
                 realAndFake = np.concatenate((memLocal,memFake), axis = 0)
-                extraForD = np.concatenate((extraLocal, extraLocal), axis = 0)
+                extraForD = np.concatenate((extraSequence[currentBatch:currentBatch+batchSize, :], extraSequence[currentBatch:currentBatch+batchSize, :]), axis = 0)
                 extraAndMem = np.concatenate((extraForD, realAndFake), axis = -1)
                 labelD = np.zeros((batchSize*2, 2), dtype = np.float64)
                 labelD[0:batchSize, 0] = 1
