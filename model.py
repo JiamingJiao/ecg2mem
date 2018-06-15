@@ -9,7 +9,7 @@ import keras
 import math
 import tensorflow as tf
 from keras.models import *
-from keras.layers import Input, merge, Conv2D, UpSampling2D, Dropout, BatchNormalization, Flatten, Dense, MaxPooling2D
+from keras.layers import Input, Concatenate, Conv2D, UpSampling2D, Dropout, BatchNormalization, Flatten, Dense, MaxPooling2D
 from keras.layers import Conv3D, UpSampling3D, MaxPooling3D, Reshape, Permute, Lambda, ZeroPadding3D
 from keras.optimizers import *
 from keras.callbacks import ModelCheckpoint, LearningRateScheduler
@@ -72,28 +72,28 @@ class networks(object):
             decoder1 = Conv2D(self.gKernels*8, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(encoder8))
             decoder1 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(decoder1)
             decoder1 = Dropout(0.5)(decoder1)
-            merge1 = merge([decoder1, encoder7], mode = 'concat', concat_axis = -1)
-            decoder2 = Conv2D(self.gKernels*8, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(merge1))
+            connection1 = Concatenate(axis = -1)([decoder1, encoder7])
+            decoder2 = Conv2D(self.gKernels*8, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(connection1))
             decoder2 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(decoder2)
             decoder2 = Dropout(0.5)(decoder2)
-            merge2 = merge([decoder2, encoder6], mode = 'concat', concat_axis = -1)
-            decoder3 = Conv2D(self.gKernels*8, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(merge2))
+            connection2 = Concatenate(axis = -1)([decoder2, encoder6])
+            decoder3 = Conv2D(self.gKernels*8, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(connection2))
             decoder3 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(decoder3)
             decoder3 = Dropout(0.5)(decoder3)
-            merge3 = merge([decoder3, encoder5], mode = 'concat', concat_axis = -1)
-            decoder4 = Conv2D(self.gKernels*8, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(merge3))
+            connection3 = Concatenate(axis = -1)([decoder3, encoder5])
+            decoder4 = Conv2D(self.gKernels*8, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(connection3))
             decoder4 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(decoder4)
-            merge4 = merge([decoder4, encoder4], mode = 'concat', concat_axis = -1)
-            decoder5 = Conv2D(self.gKernels*8, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(merge4))
+            connection4 = Concatenate(axis = -1)([decoder4, encoder4])
+            decoder5 = Conv2D(self.gKernels*8, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(connection4))
             decoder5 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(decoder5)
-            merge5 = merge([decoder5, encoder3], mode = 'concat', concat_axis = -1)
-            decoder6 = Conv2D(self.gKernels*4, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(merge5))
+            connection5 = Concatenate(axis = -1)([decoder5, encoder3])
+            decoder6 = Conv2D(self.gKernels*4, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(connection5))
             decoder6 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(decoder6)
-            merge6 = merge([decoder6, encoder2], mode = 'concat', concat_axis = -1)
-            decoder7 = Conv2D(self.gKernels*2, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(merge6))
+            connection6 = Concatenate(axis = -1)([decoder6, encoder2])
+            decoder7 = Conv2D(self.gKernels*2, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(connection6))
             decoder7 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(decoder7)
-            merge7 = merge([decoder7, encoder1], mode = 'concat', concat_axis = -1)
-            decoder8 = Conv2D(self.gKernels, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(merge7))
+            connection7 = Concatenate(axis = -1)([decoder7, encoder1])
+            decoder8 = Conv2D(self.gKernels, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(connection7))
         decoder9 = Conv2D(1, 1, activation = 'tanh')(decoder8)
         model = Model(input = inputs, output = decoder9, name = 'uNet')
         return model
@@ -133,40 +133,41 @@ class networks(object):
         padding = 'same', kernel_initializer = 'he_normal')(UpSampling3D(size = (1,2,2))(encoder8))
         decoder1 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(decoder1)
         decoder1 = Dropout(0.5)(decoder1)
-        merge1 = merge([decoder1, encoder7], mode = 'concat', concat_axis = -1)
+        connection1 = Concatenate(axis = -1)([decoder1, encoder7])
         decoder2 = Conv3D(self.gKernels*8, kernel_size = (self.temporalDepth, 4, 4), activation = 'relu', \
-        padding = 'same', kernel_initializer = 'he_normal')(UpSampling3D(size = (1,2,2))(merge1))
+        padding = 'same', kernel_initializer = 'he_normal')(UpSampling3D(size = (1,2,2))(connection1))
         decoder2 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(decoder2)
         decoder2 = Dropout(0.5)(decoder2)
-        merge2 = merge([decoder2, encoder6], mode = 'concat', concat_axis = -1)
+        connection2 = Concatenate(axis = -1)([decoder2, encoder6])
         decoder3 = Conv3D(self.gKernels*8, kernel_size = (self.temporalDepth, 4, 4), activation = 'relu', \
-        padding = 'same', kernel_initializer = 'he_normal')(UpSampling3D(size = (1,2,2))(merge2))
+        padding = 'same', kernel_initializer = 'he_normal')(UpSampling3D(size = (1,2,2))(connection2))
         decoder3 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(decoder3)
         decoder3 = Dropout(0.5)(decoder3)
-        merge3 = merge([decoder3, encoder5], mode = 'concat', concat_axis = -1)
+        connection3 = Concatenate(axis = -1)([decoder3, encoder5])
         decoder4 = Conv3D(self.gKernels*8, kernel_size = (self.temporalDepth, 4, 4), activation = 'relu', \
-        padding = 'same', kernel_initializer = 'he_normal')(UpSampling3D(size = (1,2,2))(merge3))
+        padding = 'same', kernel_initializer = 'he_normal')(UpSampling3D(size = (1,2,2))(connection3))
         decoder4 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(decoder4)
-        merge4 = merge([decoder4, encoder4], mode = 'concat', concat_axis = -1)
+        connection4 = Concatenate(axis = -1)([decoder4, encoder4])
         decoder5 = Conv3D(self.gKernels*8, kernel_size = (self.temporalDepth, 4, 4), activation = 'relu', \
-        padding = 'same', kernel_initializer = 'he_normal')(UpSampling3D(size = (1,2,2))(merge4))
+        padding = 'same', kernel_initializer = 'he_normal')(UpSampling3D(size = (1,2,2))(connection4))
         decoder5 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(decoder5)
-        merge5 = merge([decoder5, encoder3], mode = 'concat', concat_axis = -1)
+        connection5 = Concatenate(axis = -1)([decoder5, encoder3])
         decoder6 = Conv3D(self.gKernels*4, kernel_size = (self.temporalDepth, 4, 4), activation = 'relu', \
-        padding = 'same', kernel_initializer = 'he_normal')(UpSampling3D(size = (1,2,2))(merge5))
+        padding = 'same', kernel_initializer = 'he_normal')(UpSampling3D(size = (1,2,2))(connection5))
         decoder6 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(decoder6)
-        merge6 = merge([decoder6, encoder2], mode = 'concat', concat_axis = -1)
+        connection6 = Concatenate(axis = -1)([decoder6, encoder2])
         decoder7 = Conv3D(self.gKernels*2, kernel_size = (self.temporalDepth, 4, 4), activation = 'relu', \
-        padding = 'same', kernel_initializer = 'he_normal')(UpSampling3D(size = (1,2,2))(merge6))
+        padding = 'same', kernel_initializer = 'he_normal')(UpSampling3D(size = (1,2,2))(connection6))
         decoder7 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(decoder7)
-        merge7 = merge([decoder7, encoder1], mode = 'concat', concat_axis = -1)
+        connection7 = Concatenate(axis = -1)([decoder7, encoder1])
         decoder8 = Conv3D(self.gKernels, kernel_size = (self.temporalDepth, 4, 4), activation = 'relu', \
-        padding = 'same', kernel_initializer = 'he_normal')(UpSampling3D(size = (1,2,2))(merge7))
+        padding = 'same', kernel_initializer = 'he_normal')(UpSampling3D(size = (1,2,2))(connection7))
         #decoder9 = Conv3D(1, 1, activation = 'sigmoid')(decoder8)
         decoder9 = Conv3D(1, kernel_size = (self.temporalDepth, 4, 4), activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(decoder8)
         decoder10 =Conv3D(1, kernel_size = (self.temporalDepth, 1, 1), activation = 'tanh', padding = 'valid', kernel_initializer = 'he_normal')(decoder9)
         squeezed10 = Lambda(squeeze, output_shape = (self.imgRows, self.imgCols, self.channels))(decoder10)
         model = Model(input = inputs, output = squeezed10, name = 'uNet3D')
+        model.summary()
         return model
 
     def straight3(self):
@@ -223,7 +224,7 @@ class networks(object):
         return model
 
 class GAN(object):
-    def __init__(self, imgRows = 256, imgCols = 256, rawRows = 200, rawCols = 200, channels = 1, netDName = None, netGName = None, temporalDepth = None, uNetConnections = 1,
+    def __init__(self, imgRows = 256, imgCols = 256, rawRows = 200, rawCols = 200, channels = 1, netDName = None, netGName = None, temporalDepth = None, uNetconnections = 1,
     lossFuncD = 'binary_crossentropy', lossFuncG = 'mae', optimizerG = 'Adam', lossRatio = 100, learningRateG = 1e-4, learningRateD = 1e-4):
         self.imgRows = imgRows
         self.imgCols = imgCols
@@ -239,32 +240,33 @@ class GAN(object):
         self.network = networks(imgRows = self.imgRows, imgCols = self.imgCols, channels = self.channels, temporalDepth = self.temporalDepth)
         if self.netDName == 'straight3':
             self.netD = self.network.straight3()
+            self.netDA = self.network.straight3()
         elif self.netDName == 'VGG16':
             self.netD = self.network.vgg16()
-        self.netD.trainable = False
+            self.netDA = self.network.vgg16()
+        self.netDA.trainable = False
         if self.netGName == 'uNet':
-            self.netG = self.network.uNet(connections = uNetConnections)
-            inputs = Input((self.imgRows, self.imgCols, self.channels))
-            outputG = self.netG(inputs)
-            inputD = merge([inputs, outputG], mode = 'concat', concat_axis = -1)
+            self.netG = self.network.uNet(connections = uNetconnections)
+            inputsA = Input((self.imgRows, self.imgCols, self.channels))
+            outputG = self.netG(inputsA)
+            inputD = Concatenate(axis = -1)([inputsA, outputG])
         elif self.netGName == 'uNet3D':
             self.netG = self.network.uNet3D()
-            inputs = Input((self.temporalDepth, self.imgRows, self.imgCols, self.channels))
-            outputG = self.netG(inputs)
-            middleLayerOfInputs = Lambda(slice, output_shape = (1, self.imgRows, self.imgCols, self.channels))(inputs)
+            inputsA = Input((self.temporalDepth, self.imgRows, self.imgCols, self.channels))
+            outputG = self.netG(inputsA)
+            middleLayerOfInputs = Lambda(slice, output_shape = (1, self.imgRows, self.imgCols, self.channels))(inputsA)
             middleLayerOfInputs = Lambda(squeeze, output_shape = (self.imgRows, self.imgCols, self.channels))(middleLayerOfInputs)
-            inputD = merge([middleLayerOfInputs, outputG], mode = 'concat', concat_axis = -1)
-        self.netG.summary()
-        outputD = self.netD(inputD)
-        self.netA = Model(input = inputs, output =[outputG, outputD], name = 'netA')
+            inputD = Concatenate(axis = -1)([middleLayerOfInputs, outputG])
+        outputD = self.netDA(inputD)
+        self.netA = Model(input = inputsA, output =[outputG, outputD], name = 'netA')
         self.netA.summary()
         if optimizerG == 'Adam':
             self.netA.compile(optimizer = Adam(lr = self.learningRateG), loss = {self.netGName:lossFuncG, self.netDName:lossFuncD},
             loss_weights = [lossRatio, 1], metrics = {self.netGName:lossFuncG, self.netDName:lossFuncD})
-        self.netD.trainable = True
-        self.netD.summary()
         self.netD.compile(optimizer = Adam(lr = self.learningRateD), loss = lossFuncD, metrics = [lossFuncD])
         print(self.netA.metrics_names)
+        self.netD.summary()
+        self.netDA.summary()
 
     def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, batchSize = 10, valSplit = 0.2, savingInterval = 50, netGOnlyEpochs = 25, continueTrain = False,
     preTrainedGPath = None):
@@ -308,6 +310,7 @@ class GAN(object):
                 labelD[0:batchSize, 0] = 1
                 labelD[batchSize:batchSize*2, 1] = 1
                 lossD = self.netD.train_on_batch(extraAndMem, labelD)
+                self.netDA.set_weights(self.netD.get_weights())
                 labelA = np.ones((batchSize, 2), dtype = np.float64) #to fool the netD
                 labelA[:, 1] = 0
                 lossA = self.netA.train_on_batch(extraLocal, [memLocal, labelA])
