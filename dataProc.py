@@ -24,7 +24,7 @@ def npyToPng(srcPath, dstPath):
         cv.imwrite(dstPath + "%04d"%i+".png",npy[i, :, :])
     print('completed')
 
-def loadData(inputPath, startNum = 0, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, imgCols = 256, normalization = 0):
+def loadData(inputPath, startNum = 0, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, imgCols = 256, normalization = 0, dstDataType = np.float64):
     fileName = glob.glob(inputPath + '*.npy')
     if resize == 0:
         mergeImg = np.ndarray((len(fileName), rawRows, rawCols), dtype = np.float64)
@@ -36,17 +36,19 @@ def loadData(inputPath, startNum = 0, resize = 0, rawRows = 200, rawCols = 200, 
         localName = inputPath + '%04d'%startNum + ".npy"
         rawImg = np.load(localName)
         if resize == 1:
-            #tempImg = cv.resize(rawImg, (imgRows, imgCols))
-            #mergeImg[i] = img_to_array(tempImg)
             mergeImg[i] = cv.resize(rawImg, (imgRows, imgCols))
         else:
-            #mergeImg[i] = img_to_array(rawImg)
             mergeImg[i] = rawImg
         startNum += 1
+    if dstDataType == np.uint8:
+        normalization == 1
     if normalization == 1:
         min = np.amin(mergeImg)
         max = np.amax(mergeImg)
         mergeImg = (mergeImg-min)/(max-min)
+    if dstDataType == np.uint8:
+        mergeImg = 255*mergeImg
+        mergeImg = mergeImg.astype(np.uint8)
     return mergeImg
 
 # generate full size pseudo-ECG maps, and downsample them if it is necessary

@@ -219,7 +219,7 @@ class networks(object):
         drop6 = Dropout(0.5)(dense6)
         dense7 = Dense(self.dKernels*64, activation = 'relu')(drop6)
         drop7 = Dropout(0.5)(dense7)
-        probability = Dense(2, activation = 'sigmoid')(drop7)
+        probability = Dense(2, activation = 'softmax')(drop7)
         model = Model(input = inputs, output = probability, name='VGG16')
         return model
 
