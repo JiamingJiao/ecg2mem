@@ -164,7 +164,7 @@ class networks(object):
         padding = 'same', kernel_initializer = 'he_normal')(UpSampling3D(size = (1,2,2))(connection7))
         #decoder9 = Conv3D(1, 1, activation = 'sigmoid')(decoder8)
         decoder9 = Conv3D(1, kernel_size = (self.temporalDepth, 4, 4), activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(decoder8)
-        decoder10 =Conv3D(1, kernel_size = (self.temporalDepth, 1, 1), activation = 'tanh', padding = 'valid', kernel_initializer = 'he_normal')(decoder9)
+        decoder10 = Conv3D(1, kernel_size = (self.temporalDepth, 1, 1), activation = 'tanh', padding = 'valid', kernel_initializer = 'he_normal')(decoder9)
         squeezed10 = Lambda(squeeze, output_shape = (self.imgRows, self.imgCols, self.channels))(decoder10)
         model = Model(input = inputs, output = squeezed10, name = 'uNet3D')
         model.summary()
@@ -190,7 +190,7 @@ class networks(object):
         dense5 = Dense(self.dKernels*16)(drop4)
         dense5 = LeakyReLU(alpha = 0.2)(dense5)
         drop5 = Dropout(0.5)(dense5)
-        probability = Dense(2, activation = 'sigmoid')(drop5)
+        probability = Dense(2, activation = 'softmax')(drop5)
         model = Model(input = inputs, output = probability, name='straight3')
         return model
 
@@ -219,13 +219,13 @@ class networks(object):
         drop6 = Dropout(0.5)(dense6)
         dense7 = Dense(self.dKernels*64, activation = 'relu')(drop6)
         drop7 = Dropout(0.5)(dense7)
-        probability = Dense(2, activation = 'sigmoid')(drop7)
+        probability = Dense(2, activation = 'softmax')(drop7)
         model = Model(input = inputs, output = probability, name='VGG16')
         return model
 
 class GAN(object):
     def __init__(self, imgRows = 256, imgCols = 256, rawRows = 200, rawCols = 200, channels = 1, netDName = None, netGName = None, temporalDepth = None, uNetconnections = 1,
-    lossFuncD = 'binary_crossentropy', lossFuncG = 'mae', optimizerG = 'Adam', lossRatio = 100, learningRateG = 1e-4, learningRateD = 1e-4):
+    lossFuncD = 'categorical_crossentropy', lossFuncG = 'mae', optimizerG = 'Adam', lossRatio = 100, learningRateG = 1e-4, learningRateD = 1e-4):
         self.imgRows = imgRows
         self.imgCols = imgCols
         self.rawRows = rawRows
@@ -292,7 +292,7 @@ class GAN(object):
         if continueTrain == False:
             checkpointer = ModelCheckpoint(weightsNetGPath, monitor = 'val_loss', verbose = 1, save_best_only = True, save_weights_only = True, mode = 'min')
             print('begin to train G')
-            self.netG.fit(x = extraTrain, y = memTrain, batch_size = batchSize*2, epochs = netGOnlyEpochs, verbose = 2, callbacks = [checkpointer], validation_split = 0.2)
+            self.netG.fit(x = extraTrain, y = memTrain, batch_size = batchSize*2, epochs = netGOnlyEpochs, verbose = 2, callbacks = [checkpointer], validation_split = valSplit)
         elif continueTrain == True:
             preTrainedGPath = preTrainedGPath + 'netG_GOnly.h5'
             self.netG.load_weights(preTrainedGPath)
