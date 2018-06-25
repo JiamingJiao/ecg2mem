@@ -164,7 +164,7 @@ class networks(object):
         padding = 'same', kernel_initializer = 'he_normal')(UpSampling3D(size = (1,2,2))(connection7))
         #decoder9 = Conv3D(1, 1, activation = 'sigmoid')(decoder8)
         decoder9 = Conv3D(1, kernel_size = (self.temporalDepth, 4, 4), activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(decoder8)
-        decoder10 =Conv3D(1, kernel_size = (self.temporalDepth, 1, 1), activation = 'tanh', padding = 'valid', kernel_initializer = 'he_normal')(decoder9)
+        decoder10 = Conv3D(1, kernel_size = (self.temporalDepth, 1, 1), activation = 'tanh', padding = 'valid', kernel_initializer = 'he_normal')(decoder9)
         squeezed10 = Lambda(squeeze, output_shape = (self.imgRows, self.imgCols, self.channels))(decoder10)
         model = Model(input = inputs, output = squeezed10, name = 'uNet3D')
         model.summary()

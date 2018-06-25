@@ -48,6 +48,7 @@ def loadData(inputPath, startNum = 0, resize = 0, rawRows = 200, rawCols = 200, 
         mergeImg = (mergeImg-min)/(max-min)
     if dstDataType == np.uint8:
         mergeImg = 255*mergeImg
+        mergeImg = np.around(mergeImg)
         mergeImg = mergeImg.astype(np.uint8)
     return mergeImg
 
