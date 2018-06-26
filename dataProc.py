@@ -41,7 +41,7 @@ def loadData(inputPath, startNum = 0, resize = 0, rawRows = 200, rawCols = 200, 
             mergeImg[i] = rawImg
         startNum += 1
     if dstDataType == np.uint8:
-        normalization == 1
+        normalization = 1
     if normalization == 1:
         min = np.amin(mergeImg)
         max = np.amax(mergeImg)
