@@ -4,16 +4,8 @@
 import numpy as np
 import cv2 as cv
 import glob
-import os
+import shutil
 import math
-#import keras
-#from keras.preprocessing.image import array_to_img, img_to_array
-
-def rename(srcPath, dstPath, deletePart = 'phie_'):
-    fileName = glob.glob(srcPath + deletePart + '*.npy')
-    for i in range(0, len(fileName)):
-        os.rename(srcPath + deletePart + '%04d.npy'%i, dstPath + '%04d.npy'%i)
-    print(delePart + 'completed')
 
 def npyToPng(srcPath, dstPath):
     npy = loadData(srcPath)
@@ -21,7 +13,7 @@ def npyToPng(srcPath, dstPath):
     max = np.amax(npy)
     npy = 255*(npy-min)/(max-min)
     for i in range(0, npy.shape[0]):
-        cv.imwrite(dstPath + "%04d"%i+".png",npy[i, :, :])
+        cv.imwrite(dstPath + "%06d"%i+".png",npy[i, :, :])
     print('completed')
 
 def loadData(inputPath, startNum = 0, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, imgCols = 256, normalization = 0, dstDataType = np.float64):
@@ -33,7 +25,7 @@ def loadData(inputPath, startNum = 0, resize = 0, rawRows = 200, rawCols = 200, 
         tempImg = np.ndarray((imgRows, imgCols), dtype = np.float64)
     rawImg = np.ndarray((rawRows, rawCols), dtype = np.float64)
     for i in range(0, len(fileName)):
-        localName = inputPath + '%04d'%startNum + ".npy"
+        localName = inputPath + '%06d'%startNum + ".npy"
         rawImg = np.load(localName)
         if resize == 1:
             mergeImg[i] = cv.resize(rawImg, (imgRows, imgCols))
@@ -89,7 +81,7 @@ def downSample(srcPath, dstPath, samplePoints = (5, 5), interpolationSize = (200
             for k in range(0, samplePoints[1]):
                 sample[j, k] = temp[j*rowStride, k*colStride]
         interpolated = cv.resize(sample, interpolationSize)
-        dstFileName = dstPath + '%04d'%i
+        dstFileName = dstPath + '%06d'%i
         np.save(dstFileName, interpolated)
     print('down sampling completed')
 
@@ -129,7 +121,7 @@ def loadImage(inputPath, startNum = 0, resize = 0, rawRows = 200, rawCols = 200,
         tempImg = np.ndarray((imgRows, imgCols), dtype = np.float64)
     rawImg = np.ndarray((rawRows, rawCols), dtype = np.float64)
     for i in range(0, len(fileName)):
-        localName = inputPath + '%04d'%startNum + ".png"
+        localName = inputPath + '%06d'%startNum + ".png"
         rawImg = cv.imread(localName, -1)
         if resize == 1:
             #tempImg = cv.resize(rawImg, (imgRows, imgCols))
@@ -155,3 +147,12 @@ def create3DData(src, temporalDepth):
     for i in range(paddingDepth, framesNum-paddingDepth):
         dst[i, :, :, :] = src[i-paddingDepth:i+paddingDepth+1, :, :]
     return dst
+
+def renameData(*srcPath,  dstPath, potentialName = 'phie'):
+    dstDataID = 0
+    for i in range(0, len(srcPath)):
+        fileName = glob.glob(srcPath[i] + potentialName + '*.npy')
+        fileNum = len(fileName)
+        for j in fileName:
+            shutil.copy(srcPath[i] + potentialName + '_%04d'%j + '.npy', dstPath + '%06d'%dstDataID + '.npy', follow_symlinks = False)
+            dstDataID += 1
