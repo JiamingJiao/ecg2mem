@@ -153,6 +153,6 @@ def renameData(*srcPath,  dstPath, potentialName = 'phie'):
     for i in range(0, len(srcPath)):
         fileName = glob.glob(srcPath[i] + potentialName + '*.npy')
         fileNum = len(fileName)
-        for j in fileName:
+        for j in range(0, fileNum):
             shutil.copy(srcPath[i] + potentialName + '_%04d'%j + '.npy', dstPath + '%06d'%dstDataID + '.npy', follow_symlinks = False)
             dstDataID += 1
