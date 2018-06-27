@@ -16,8 +16,9 @@ def npyToPng(srcPath, dstPath):
         cv.imwrite(dstPath + "%06d"%i+".png",npy[i, :, :])
     print('completed')
 
-def loadData(inputPath, startNum = 0, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, imgCols = 256, normalization = 0, dstDataType = np.float64):
-    fileName = glob.glob(inputPath + '*.npy')
+def loadData(srcPath, startNum = 0, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, imgCols = 256, normalization = 0, normalizationRange = (0., 1.),
+dstDataType = np.float64):
+    fileName = glob.glob(srcPath + '*.npy')
     if resize == 0:
         mergeImg = np.ndarray((len(fileName), rawRows, rawCols), dtype = np.float64)
     else:
@@ -25,7 +26,7 @@ def loadData(inputPath, startNum = 0, resize = 0, rawRows = 200, rawCols = 200, 
         tempImg = np.ndarray((imgRows, imgCols), dtype = np.float64)
     rawImg = np.ndarray((rawRows, rawCols), dtype = np.float64)
     for i in range(0, len(fileName)):
-        localName = inputPath + '%06d'%startNum + ".npy"
+        localName = srcPath + '%06d'%startNum + ".npy"
         rawImg = np.load(localName)
         if resize == 1:
             mergeImg[i] = cv.resize(rawImg, (imgRows, imgCols))
@@ -34,19 +35,19 @@ def loadData(inputPath, startNum = 0, resize = 0, rawRows = 200, rawCols = 200, 
         startNum += 1
     if dstDataType == np.uint8:
         normalization = 1
+        normalizationRange = (0, 255)
     if normalization == 1:
         min = np.amin(mergeImg)
         max = np.amax(mergeImg)
-        mergeImg = (mergeImg-min)/(max-min)
+        mergeImg = normalizationRange[0] + ((mergeImg-min)*(normalizationRange[1]-normalizationRange[0]))/(max-min)
     if dstDataType == np.uint8:
-        mergeImg = 255*mergeImg
         mergeImg = np.around(mergeImg)
         mergeImg = mergeImg.astype(np.uint8)
     return mergeImg
 
 # generate full size pseudo-ECG maps, and downsample them if it is necessary
 def generatePseudoECG(srcPath, dstPath):
-    src = loadData(inputPath = srcPath, startNum = 0, resize = 0)
+    src = loadData(srcPath = srcPath, startNum = 0, resize = 0)
     dst = np.ndarray(src.shape, dtype = np.float64)
     diffVKernel = np.zeros((3, 3, 1), dtype = np.float64)
     diffVKernel[1, :, 0] = 1
@@ -112,8 +113,8 @@ def generateSparsePseudoECG(srcPath, dstPath, samplePoints = (10, 10)):
         interpolated[i, :, :] = cv.resize(pseudoECG, (src.shape[1], src.shape[2]))
     return interpolated
 
-def loadImage(inputPath, startNum = 0, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, imgCols = 256, normalization = 0):
-    fileName = glob.glob(inputPath + '*.png')
+def loadImage(srcPath, startNum = 0, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, imgCols = 256, normalization = 0):
+    fileName = glob.glob(srcPath + '*.png')
     if resize == 0:
         mergeImg = np.ndarray((len(fileName), rawRows, rawCols), dtype = np.float64)
     else:
@@ -121,7 +122,7 @@ def loadImage(inputPath, startNum = 0, resize = 0, rawRows = 200, rawCols = 200,
         tempImg = np.ndarray((imgRows, imgCols), dtype = np.float64)
     rawImg = np.ndarray((rawRows, rawCols), dtype = np.float64)
     for i in range(0, len(fileName)):
-        localName = inputPath + '%06d'%startNum + ".png"
+        localName = srcPath + '%06d'%startNum + ".png"
         rawImg = cv.imread(localName, -1)
         if resize == 1:
             #tempImg = cv.resize(rawImg, (imgRows, imgCols))

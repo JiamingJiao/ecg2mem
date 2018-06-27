@@ -18,13 +18,14 @@ from keras.layers.advanced_activations import LeakyReLU
 import dataProc
 
 class networks(object):
-    def __init__(self, imgRows = None, imgCols = None, channels = None, gKernels = 64, dKernels = 64, temporalDepth = None):
+    def __init__(self, imgRows = None, imgCols = None, channels = None, gKernels = 64, dKernels = 64, temporalDepth = None, activationG = None):
         self.imgRows = imgRows
         self.imgCols = imgCols
         self.channels = channels
         self.gKernels = gKernels
         self.dKernels = dKernels
         self.temporalDepth = temporalDepth
+        self.activationG = activationG
 
     def uNet(self, connections):
         inputs = Input((self.imgRows, self.imgCols, self.channels))
@@ -94,7 +95,7 @@ class networks(object):
             decoder7 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(decoder7)
             connection7 = Concatenate(axis = -1)([decoder7, encoder1])
             decoder8 = Conv2D(self.gKernels, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(connection7))
-        decoder9 = Conv2D(1, 1, activation = 'tanh')(decoder8)
+        decoder9 = Conv2D(1, 1, activation = self.activationG)(decoder8)
         model = Model(input = inputs, output = decoder9, name = 'uNet')
         return model
 
@@ -164,7 +165,7 @@ class networks(object):
         padding = 'same', kernel_initializer = 'he_normal')(UpSampling3D(size = (1,2,2))(connection7))
         #decoder9 = Conv3D(1, 1, activation = 'sigmoid')(decoder8)
         decoder9 = Conv3D(1, kernel_size = (self.temporalDepth, 4, 4), activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(decoder8)
-        decoder10 = Conv3D(1, kernel_size = (self.temporalDepth, 1, 1), activation = 'tanh', padding = 'valid', kernel_initializer = 'he_normal')(decoder9)
+        decoder10 = Conv3D(1, kernel_size = (self.temporalDepth, 1, 1), activation = self.activationG, padding = 'valid', kernel_initializer = 'he_normal')(decoder9)
         squeezed10 = Lambda(squeeze, output_shape = (self.imgRows, self.imgCols, self.channels))(decoder10)
         model = Model(input = inputs, output = squeezed10, name = 'uNet3D')
         model.summary()
@@ -225,7 +226,7 @@ class networks(object):
 
 class GAN(object):
     def __init__(self, imgRows = 256, imgCols = 256, rawRows = 200, rawCols = 200, channels = 1, netDName = None, netGName = None, temporalDepth = None, uNetconnections = 1,
-    lossFuncD = 'categorical_crossentropy', lossFuncG = 'mae', optimizerG = 'Adam', lossRatio = 100, learningRateG = 1e-4, learningRateD = 1e-4):
+    activationG = 'sigmoid', lossFuncD = 'categorical_crossentropy', lossFuncG = 'mae', optimizerG = 'Adam', lossRatio = 100, learningRateG = 1e-4, learningRateD = 1e-4):
         self.imgRows = imgRows
         self.imgCols = imgCols
         self.rawRows = rawRows
@@ -237,7 +238,8 @@ class GAN(object):
         self.lossFuncG = lossFuncG
         self.learningRateG = learningRateG
         self.learningRateD = learningRateD
-        self.network = networks(imgRows = self.imgRows, imgCols = self.imgCols, channels = self.channels, temporalDepth = self.temporalDepth)
+        self.activationG = activationG
+        self.network = networks(imgRows = self.imgRows, imgCols = self.imgCols, channels = self.channels, temporalDepth = self.temporalDepth, activationG = self.activationG)
         if self.netDName == 'straight3':
             self.netD = self.network.straight3()
             self.netDA = self.network.straight3()
@@ -270,16 +272,20 @@ class GAN(object):
 
     def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, batchSize = 10, valSplit = 0.2, savingInterval = 50, netGOnlyEpochs = 25, continueTrain = False,
     preTrainedGPath = None):
+        if self.activationG == 'tanh':
+            dataRange = (-1., 1.)
+        else:
+            dataRange = (0., 1.)
         if self.netGName == 'uNet':
-            extraSequence = dataProc.loadData(inputPath = extraPath, startNum = 0, resize = 1, normalization = 1)
+            extraSequence = dataProc.loadData(srcPath = extraPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange)
             extraSequence = extraSequence.reshape((extraSequence.shape[0], self.imgRows, self.imgCols, self.channels))
             extraTrain = extraSequence
         elif self.netGName == 'uNet3D':
-            extraSequence = dataProc.loadData(inputPath = extraPath, startNum = 0, resize = 1, normalization = 1)
+            extraSequence = dataProc.loadData(srcPath = extraPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange)
             extraTrain = dataProc.create3DData(extraSequence, temporalDepth = self.temporalDepth)
             extraTrain = extraTrain.reshape((extraTrain.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels))
             extraSequence = extraSequence.reshape((extraSequence.shape[0], self.imgRows, self.imgCols, self.channels))
-        memTrain = dataProc.loadData(inputPath = memPath, startNum = 0, resize = 1, normalization = 1)
+        memTrain = dataProc.loadData(srcPath = memPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange)
         memTrain = memTrain.reshape((memTrain.shape[0], self.imgRows, self.imgCols, self.channels))
         print(extraTrain.shape)
         lossRecorder = np.ndarray((round(extraTrain.shape[0]/batchSize)*epochsNum, 2), dtype = np.float32)
@@ -292,7 +298,8 @@ class GAN(object):
         if continueTrain == False:
             checkpointer = ModelCheckpoint(weightsNetGPath, monitor = 'val_loss', verbose = 1, save_best_only = True, save_weights_only = True, mode = 'min')
             print('begin to train G')
-            self.netG.fit(x = extraTrain, y = memTrain, batch_size = batchSize*2, epochs = netGOnlyEpochs, verbose = 2, callbacks = [checkpointer], validation_split = valSplit)
+            trainingHistoryG = self.netG.fit(x = extraTrain, y = memTrain, batch_size = batchSize*2, epochs = netGOnlyEpochs, verbose = 2,callbacks = [checkpointer],
+            validation_split = valSplit)
         elif continueTrain == True:
             preTrainedGPath = preTrainedGPath + 'netG_GOnly.h5'
             self.netG.load_weights(preTrainedGPath)
