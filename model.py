@@ -273,9 +273,9 @@ class GAN(object):
     def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, batchSize = 10, valSplit = 0.2, savingInterval = 50, netGOnlyEpochs = 25, continueTrain = False,
     preTrainedGPath = None):
         if self.activationG == 'tanh':
-            dataRange = (-1., 1.)
+            dataRange = [-1., 1.]
         else:
-            dataRange = (0., 1.)
+            dataRange = [0., 1.]
         if self.netGName == 'uNet':
             extraSequence = dataProc.loadData(srcPath = extraPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange)
             extraSequence = extraSequence.reshape((extraSequence.shape[0], self.imgRows, self.imgCols, self.channels))

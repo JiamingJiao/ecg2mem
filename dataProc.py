@@ -16,7 +16,7 @@ def npyToPng(srcPath, dstPath):
         cv.imwrite(dstPath + "%06d"%i+".png",npy[i, :, :])
     print('completed')
 
-def loadData(srcPath, startNum = 0, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, imgCols = 256, normalization = 0, normalizationRange = (0., 1.),
+def loadData(srcPath, startNum = 0, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, imgCols = 256, normalization = 0, normalizationRange = [0., 1.],
 dstDataType = np.float64):
     fileName = glob.glob(srcPath + '*.npy')
     if resize == 0:
@@ -35,7 +35,7 @@ dstDataType = np.float64):
         startNum += 1
     if dstDataType == np.uint8:
         normalization = 1
-        normalizationRange = (0, 255)
+        normalizationRange = [0, 255]
     if normalization == 1:
         min = np.amin(mergeImg)
         max = np.amax(mergeImg)
