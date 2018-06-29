@@ -12,7 +12,7 @@ from keras.models import *
 from keras.layers import Input, Concatenate, Conv2D, UpSampling2D, Dropout, BatchNormalization, Flatten, Dense, MaxPooling2D
 from keras.layers import Conv3D, UpSampling3D, MaxPooling3D, Reshape, Permute, Lambda, ZeroPadding3D
 from keras.optimizers import *
-from keras.callbacks import ModelCheckpoint, LearningRateScheduler
+from keras.callbacks import ModelCheckpoint, TensorBoard, LearningRateScheduler
 from keras import backend
 from keras.layers.advanced_activations import LeakyReLU
 import dataProc
@@ -271,21 +271,21 @@ class GAN(object):
         self.netDA.summary()
 
     def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, batchSize = 10, valSplit = 0.2, savingInterval = 50, netGOnlyEpochs = 25, continueTrain = False,
-    preTrainedGPath = None):
+    preTrainedGPath = None, dataType = np.float64):
         if self.activationG == 'tanh':
             dataRange = [-1., 1.]
         else:
             dataRange = [0., 1.]
         if self.netGName == 'uNet':
-            extraSequence = dataProc.loadData(srcPath = extraPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange)
+            extraSequence = dataProc.loadData(srcPath = extraPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange, dstDataType = dataType)
             extraSequence = extraSequence.reshape((extraSequence.shape[0], self.imgRows, self.imgCols, self.channels))
             extraTrain = extraSequence
         elif self.netGName == 'uNet3D':
-            extraSequence = dataProc.loadData(srcPath = extraPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange)
+            extraSequence = dataProc.loadData(srcPath = extraPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange, dstDataType = dataType)
             extraTrain = dataProc.create3DData(extraSequence, temporalDepth = self.temporalDepth)
             extraTrain = extraTrain.reshape((extraTrain.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels))
             extraSequence = extraSequence.reshape((extraSequence.shape[0], self.imgRows, self.imgCols, self.channels))
-        memTrain = dataProc.loadData(srcPath = memPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange)
+        memTrain = dataProc.loadData(srcPath = memPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange, dstDataType = dataType)
         memTrain = memTrain.reshape((memTrain.shape[0], self.imgRows, self.imgCols, self.channels))
         print(extraTrain.shape)
         lossRecorder = np.ndarray((round(extraTrain.shape[0]/batchSize)*epochsNum, 2), dtype = np.float32)
@@ -297,8 +297,10 @@ class GAN(object):
         self.netG.compile(optimizer = Adam(lr = self.learningRateG), loss = self.lossFuncG, metrics = [self.lossFuncG])
         if continueTrain == False:
             checkpointer = ModelCheckpoint(weightsNetGPath, monitor = 'val_loss', verbose = 1, save_best_only = True, save_weights_only = True, mode = 'min')
+            tensorboardDir = modelPath + 'g_only_log'
+            recorder = TensorBoard(log_dir = tensorboardDir, write_graph = False)
             print('begin to train G')
-            trainingHistoryG = self.netG.fit(x = extraTrain, y = memTrain, batch_size = batchSize*2, epochs = netGOnlyEpochs, verbose = 2,callbacks = [checkpointer],
+            trainingHistoryG = self.netG.fit(x = extraTrain, y = memTrain, batch_size = batchSize*2, epochs = netGOnlyEpochs, verbose = 2,callbacks = [checkpointer,recorder],
             validation_split = valSplit)
         elif continueTrain == True:
             preTrainedGPath = preTrainedGPath + 'netG_GOnly.h5'

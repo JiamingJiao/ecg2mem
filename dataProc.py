@@ -33,16 +33,17 @@ dstDataType = np.float64):
         else:
             mergeImg[i] = rawImg
         startNum += 1
-    if dstDataType == np.uint8:
+    if dstDataType == np.int32:
         normalization = 1
-        normalizationRange = [0, 255]
+        lowerBound = 255*normalizationRange[0]
+        upperBound = 255*normalizationRange[1]
     if normalization == 1:
         min = np.amin(mergeImg)
         max = np.amax(mergeImg)
-        mergeImg = normalizationRange[0] + ((mergeImg-min)*(normalizationRange[1]-normalizationRange[0]))/(max-min)
-    if dstDataType == np.uint8:
+        mergeImg = lowerBound + ((mergeImg-min)*(upperBound-lowerBound))/(max-min)
+    if dstDataType == np.int32:
         mergeImg = np.around(mergeImg)
-        mergeImg = mergeImg.astype(np.uint8)
+        mergeImg = mergeImg.astype(np.int32)
     return mergeImg
 
 # generate full size pseudo-ECG maps, and downsample them if it is necessary
