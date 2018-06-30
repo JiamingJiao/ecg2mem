@@ -15,6 +15,7 @@ from keras.optimizers import *
 from keras.callbacks import ModelCheckpoint, TensorBoard, LearningRateScheduler
 from keras import backend
 from keras.layers.advanced_activations import LeakyReLU
+from keras.utils import to_categorical
 import dataProc
 
 class networks(object):
@@ -271,21 +272,21 @@ class GAN(object):
         self.netDA.summary()
 
     def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, batchSize = 10, valSplit = 0.2, savingInterval = 50, netGOnlyEpochs = 25, continueTrain = False,
-    preTrainedGPath = None, dataType = np.float64):
+    preTrainedGPath = None, approximateData = False):
         if self.activationG == 'tanh':
             dataRange = [-1., 1.]
         else:
             dataRange = [0., 1.]
         if self.netGName == 'uNet':
-            extraSequence = dataProc.loadData(srcPath = extraPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange, dstDataType = dataType)
+            extraSequence = dataProc.loadData(srcPath = extraPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
             extraSequence = extraSequence.reshape((extraSequence.shape[0], self.imgRows, self.imgCols, self.channels))
             extraTrain = extraSequence
         elif self.netGName == 'uNet3D':
-            extraSequence = dataProc.loadData(srcPath = extraPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange, dstDataType = dataType)
+            extraSequence = dataProc.loadData(srcPath = extraPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
             extraTrain = dataProc.create3DData(extraSequence, temporalDepth = self.temporalDepth)
             extraTrain = extraTrain.reshape((extraTrain.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels))
             extraSequence = extraSequence.reshape((extraSequence.shape[0], self.imgRows, self.imgCols, self.channels))
-        memTrain = dataProc.loadData(srcPath = memPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange, dstDataType = dataType)
+        memTrain = dataProc.loadData(srcPath = memPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
         memTrain = memTrain.reshape((memTrain.shape[0], self.imgRows, self.imgCols, self.channels))
         print(extraTrain.shape)
         lossRecorder = np.ndarray((round(extraTrain.shape[0]/batchSize)*epochsNum, 2), dtype = np.float32)
@@ -315,14 +316,14 @@ class GAN(object):
                 realAndFake = np.concatenate((memLocal,memFake), axis = 0)
                 extraForD = np.concatenate((extraSequence[currentBatch:currentBatch+batchSize, :], extraSequence[currentBatch:currentBatch+batchSize, :]), axis = 0)
                 extraAndMem = np.concatenate((extraForD, realAndFake), axis = -1)
-                labelD = np.zeros((batchSize*2, 2), dtype = np.float64)
-                labelD[0:batchSize, 0] = 1
-                labelD[batchSize:batchSize*2, 1] = 1
-                lossD = self.netD.train_on_batch(extraAndMem, labelD)
+                labelD = np.zeros((batchSize*2), dtype = np.int32)
+                labelD[0:batchSize] = 1
+                oneHotLabelD = to_categorical(labelD, 2)
+                lossD = self.netD.train_on_batch(extraAndMem, oneHotLabelD)
                 self.netDA.set_weights(self.netD.get_weights())
-                labelA = np.ones((batchSize, 2), dtype = np.float64) #to fool the netD
-                labelA[:, 1] = 0
-                lossA = self.netA.train_on_batch(extraLocal, [memLocal, labelA])
+                labelA = np.ones((batchSize), dtype = np.int32) #to fool the netD
+                oneHotLabelA = to_categorical(labelA, 2)
+                lossA = self.netA.train_on_batch(extraLocal, [memLocal, oneHotLabelA])
                 lossRecorder[lossCounter, 0] = lossD[0]
                 lossRecorder[lossCounter, 1] = lossA[0]
                 lossCounter += 1
