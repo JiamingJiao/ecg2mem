@@ -264,9 +264,9 @@ class GAN(object):
         self.netA = Model(input = inputsA, output =[outputG, outputD], name = 'netA')
         self.netA.summary()
         if optimizerG == 'Adam':
-            self.netA.compile(optimizer = Adam(lr = self.learningRateG), loss = {self.netGName:lossFuncG, self.netDName:wassersteinDistance},
+            self.netA.compile(optimizer = Adam(lr = self.learningRateG), loss = {self.netGName:lossFuncG, self.netDName:self.wassersteinDistance},
             loss_weights = [lossRatio, 1], metrics = {self.netGName:lossFuncG, self.netDName:lossFuncD})
-        self.netD.compile(optimizer = Adam(lr = self.learningRateD), loss = wassersteinDistance, metrics = [lossFuncD])
+        self.netD.compile(optimizer = Adam(lr = self.learningRateD), loss = self.wassersteinDistance, metrics = [lossFuncD])
         print(self.netA.metrics_names)
         self.netD.summary()
         self.netDA.summary()
@@ -365,6 +365,6 @@ def slice(src):
 
 def randomlyWeightedAverage(src1, src2):
     length = src1.shape[0]
-    weights = K.random_uniform((length, 1, 1, 1), minval = 0., maxval = 1., dtype = 'tf.float64')
+    weights = K.random_uniform((length, 1, 1, 1), minval = 0., maxval = 1.)
     dst = (weights*src1) + ((1-weights)*src2)
     return dst
