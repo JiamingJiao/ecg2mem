@@ -8,6 +8,7 @@ import glob
 import keras
 import math
 import tensorflow as tf
+import keras.backend as K
 from keras.models import *
 from keras.layers import Input, Concatenate, Conv2D, UpSampling2D, Dropout, BatchNormalization, Flatten, Dense, MaxPooling2D
 from keras.layers import Conv3D, UpSampling3D, MaxPooling3D, Reshape, Permute, Lambda, ZeroPadding3D
@@ -191,7 +192,7 @@ class networks(object):
         dense5 = Dense(self.dKernels*16)(drop4)
         dense5 = LeakyReLU(alpha = 0.2)(dense5)
         drop5 = Dropout(0.5)(dense5)
-        probability = Dense(2, activation = 'softmax')(drop5)
+        probability = Dense(1, activation = 'linear')(drop5)
         model = Model(input = inputs, output = probability, name='straight3')
         return model
 
@@ -220,7 +221,7 @@ class networks(object):
         drop6 = Dropout(0.5)(dense6)
         dense7 = Dense(self.dKernels*64, activation = 'relu')(drop6)
         drop7 = Dropout(0.5)(dense7)
-        probability = Dense(2, activation = 'softmax')(drop7)
+        probability = Dense(1, activation = 'linear')(drop7)
         model = Model(input = inputs, output = probability, name='VGG16')
         return model
 
@@ -263,9 +264,9 @@ class GAN(object):
         self.netA = Model(input = inputsA, output =[outputG, outputD], name = 'netA')
         self.netA.summary()
         if optimizerG == 'Adam':
-            self.netA.compile(optimizer = Adam(lr = self.learningRateG), loss = {self.netGName:lossFuncG, self.netDName:lossFuncD},
+            self.netA.compile(optimizer = Adam(lr = self.learningRateG), loss = {self.netGName:lossFuncG, self.netDName:wassersteinDistance},
             loss_weights = [lossRatio, 1], metrics = {self.netGName:lossFuncG, self.netDName:lossFuncD})
-        self.netD.compile(optimizer = Adam(lr = self.learningRateD), loss = lossFuncD, metrics = [lossFuncD])
+        self.netD.compile(optimizer = Adam(lr = self.learningRateD), loss = wassersteinDistance, metrics = [lossFuncD])
         print(self.netA.metrics_names)
         self.netD.summary()
         self.netDA.summary()
@@ -303,6 +304,9 @@ class GAN(object):
         elif continueTrain == True:
             preTrainedGPath = preTrainedGPath + 'netG_GOnly.h5'
             self.netG.load_weights(preTrainedGPath)
+        labelD = np.ones((batchSize*2), dtype = np.float64)
+        labelD[0:batchSize] = -1
+        labelA = np.ones((batchSize), dtype = np.float64)
         for currentEpoch in range(netGOnlyEpochs, epochsNum):
             for currentBatch in range(0, len(extraTrain), batchSize):
                 if (currentEpoch == netGOnlyEpochs) and (currentBatch == 0):
@@ -313,13 +317,8 @@ class GAN(object):
                 realAndFake = np.concatenate((memLocal,memFake), axis = 0)
                 extraForD = np.concatenate((extraSequence[currentBatch:currentBatch+batchSize, :], extraSequence[currentBatch:currentBatch+batchSize, :]), axis = 0)
                 extraAndMem = np.concatenate((extraForD, realAndFake), axis = -1)
-                labelD = np.zeros((batchSize*2, 2), dtype = np.float64)
-                labelD[0:batchSize, 0] = 1
-                labelD[batchSize:batchSize*2, 1] = 1
                 lossD = self.netD.train_on_batch(extraAndMem, labelD)
                 self.netDA.set_weights(self.netD.get_weights())
-                labelA = np.ones((batchSize, 2), dtype = np.float64) #to fool the netD
-                labelA[:, 1] = 0
                 lossA = self.netA.train_on_batch(extraLocal, [memLocal, labelA])
                 lossRecorder[lossCounter, 0] = lossD[0]
                 lossRecorder[lossCounter, 1] = lossA[0]
@@ -345,6 +344,13 @@ class GAN(object):
         np.save(modelPath + 'loss', lossRecorder)
         print('training completed')
 
+    def wassersteinDistance(self, src1, src2):
+        dst = K.mean(src1*src2)
+        return dst
+
+    def gradientPenaltyLoss(self, ):
+        return dst
+
 def squeeze(src):
     dst = tf.squeeze(src, [1])
     return dst
@@ -355,4 +361,10 @@ def slice(src):
     dst = tf.slice(src, [0, middleLayer, 0, 0, 0], [-1, 1, -1, -1, -1])
     print(srcShape)
     print(dst.shape)
+    return dst
+
+def randomlyWeightedAverage(src1, src2):
+    length = src1.shape[0]
+    weights = K.random_uniform((length, 1, 1, 1), minval = 0., maxval = 1., dtype = 'tf.float64')
+    dst = (weights*src1) + ((1-weights)*src2)
     return dst
