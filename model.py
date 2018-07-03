@@ -7,6 +7,7 @@ import os
 import glob
 import keras
 import math
+import functools
 import tensorflow as tf
 import keras.backend as K
 from keras.models import *
@@ -14,7 +15,6 @@ from keras.layers import Input, Concatenate, Conv2D, UpSampling2D, Dropout, Batc
 from keras.layers import Conv3D, UpSampling3D, MaxPooling3D, Reshape, Permute, Lambda, ZeroPadding3D
 from keras.optimizers import *
 from keras.callbacks import ModelCheckpoint, LearningRateScheduler
-from keras import backend
 from keras.layers.advanced_activations import LeakyReLU
 import dataProc
 
@@ -226,7 +226,7 @@ class networks(object):
 
 class GAN(object):
     def __init__(self, imgRows = 256, imgCols = 256, rawRows = 200, rawCols = 200, channels = 1, netDName = None, netGName = None, temporalDepth = None, uNetconnections = 1,
-    activationG = 'sigmoid', lossFuncD = 'categorical_crossentropy', lossFuncG = 'mae', lossRatio = 100, learningRateG = 1e-4, learningRateD = 1e-4):
+    activationG = 'sigmoid', lossFuncD = 'categorical_crossentropy', lossFuncG = 'mae', gradientPenaltyWeight = 10, lossRatio = 100, learningRateG = 1e-4, learningRateD = 1e-4):
         self.imgRows = imgRows
         self.imgCols = imgCols
         self.rawRows = rawRows
@@ -262,7 +262,7 @@ class GAN(object):
         outputsDOnReal = self.netD(realPair)
         outputsDOnFake = self.netD(fakePair)
         averagedSamples = Lambda(randomlyWeightedAverage, output_shape = (self.imgRows, self.imgCols, self.channels*2))(realPair, fakePair)
-        gradient =
+        gradientPenaltyLoss = functools.partial(calculateGradientPenaltyLoss, averageSamples = averagedSamples, weight = gradientPenaltyWeight)
         self.penalizedNetD = Model(inputs = [real, inputsGForGradient], outputs = [outputsDOnReal, outputsDOnFake, ])
         #build adversarial network
         if self.netGName == 'uNet':
@@ -379,9 +379,16 @@ def randomlyWeightedAverage(src1, src2):
     dst = (weights*src1) + ((1-weights)*src2)
     return dst
 
-def wassersteinDistance(self, src1, src2):
+def wassersteinDistance(src1, src2):
     dst = K.mean(src1*src2)
     return dst
 
-def gradientPenaltyLoss(self, ):
-    return dst
+def calculateGradientPenaltyLoss(true, prediction, samples, weight):
+    gradients = K.gradient(prediction, samples)[0]
+    gradientsSqr = K.square(gradients)
+    gradientsSqrSum = K.sum(gradientsSqr, axis = np.arange(1, len(gradientsSqr.shape)))
+    gradientsL2Norm = K.sqrt(gradientsSqrSum)
+    penalty = weight*K.square(1-gradientL2Norm)
+    print(penalty.shape)
+    averagePenalty = K.mean(penalty, axis = 0)
+    return averagePenalty
