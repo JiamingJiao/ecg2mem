@@ -169,7 +169,6 @@ class networks(object):
         decoder10 = Conv3D(1, kernel_size = (self.temporalDepth, 1, 1), activation = self.activationG, padding = 'valid', kernel_initializer = 'he_normal')(decoder9)
         squeezed10 = Lambda(squeeze, output_shape = (self.imgRows, self.imgCols, self.channels))(decoder10)
         model = Model(input = inputs, output = squeezed10, name = 'uNet3D')
-        model.summary()
         return model
 
     def straight3(self):
@@ -227,7 +226,7 @@ class networks(object):
 
 class GAN(object):
     def __init__(self, imgRows = 256, imgCols = 256, rawRows = 200, rawCols = 200, channels = 1, netDName = None, netGName = None, temporalDepth = None, uNetconnections = 1,
-    activationG = 'sigmoid', lossFuncD = 'categorical_crossentropy', lossFuncG = 'mae', optimizerG = 'Adam', lossRatio = 100, learningRateG = 1e-4, learningRateD = 1e-4):
+    activationG = 'sigmoid', lossFuncD = 'categorical_crossentropy', lossFuncG = 'mae', lossRatio = 100, learningRateG = 1e-4, learningRateD = 1e-4):
         self.imgRows = imgRows
         self.imgCols = imgCols
         self.rawRows = rawRows
@@ -243,11 +242,29 @@ class GAN(object):
         self.network = networks(imgRows = self.imgRows, imgCols = self.imgCols, channels = self.channels, temporalDepth = self.temporalDepth, activationG = self.activationG)
         if self.netDName == 'straight3':
             self.netD = self.network.straight3()
-            self.netDA = self.network.straight3()
         elif self.netDName == 'VGG16':
             self.netD = self.network.vgg16()
-            self.netDA = self.network.vgg16()
-        self.netDA.trainable = False
+        #add gradient penalty on D
+        real = Input((self.imgRows, self.imgCols, self.channels))
+        if self.netGName == 'uNet':
+            self.netG = self.network.uNet(connections = uNetconnections)
+            self.netG.trainable = False
+            inputsGForGradient = Input((self.imgRows, self.imgCols, self.channels))
+            outputsGForGradient = sef.netG(inputsGForGradient)
+            realPair = Concatenate(axis = -1)([inputsGForGradient, real])
+            fakePair = Concatenate(axis = -1)([inputsGForGradient, outputsGForGradient])
+        elif self.netGName == 'uNet3D':
+            self.netG = self.network.uNet3D()
+            inputsGForGradient = Input((self.temporalDepth, self.imgRows, self.imgCols, self.channels))
+            self.netG.trainable = False
+            inputsGForGradient = Input((self.temporalDepth, self.imgRows, self.imgCols, self.channels))
+            outputsGForGradient = self.netG(inputsGForGradient)
+        outputsDOnReal = self.netD(realPair)
+        outputsDOnFake = self.netD(fakePair)
+        averagedSamples = Lambda(randomlyWeightedAverage, output_shape = (self.imgRows, self.imgCols, self.channels*2))(realPair, fakePair)
+        gradient =
+        self.penalizedNetD = Model(inputs = [real, inputsGForGradient], outputs = [outputsDOnReal, outputsDOnFake, ])
+        #build adversarial network
         if self.netGName == 'uNet':
             self.netG = self.network.uNet(connections = uNetconnections)
             inputsA = Input((self.imgRows, self.imgCols, self.channels))
@@ -260,16 +277,16 @@ class GAN(object):
             middleLayerOfInputs = Lambda(slice, output_shape = (1, self.imgRows, self.imgCols, self.channels))(inputsA)
             middleLayerOfInputs = Lambda(squeeze, output_shape = (self.imgRows, self.imgCols, self.channels))(middleLayerOfInputs)
             inputD = Concatenate(axis = -1)([middleLayerOfInputs, outputG])
-        outputD = self.netDA(inputD)
+        outputD = self.netD(inputD)
         self.netA = Model(input = inputsA, output =[outputG, outputD], name = 'netA')
-        self.netA.summary()
-        if optimizerG == 'Adam':
-            self.netA.compile(optimizer = Adam(lr = self.learningRateG), loss = {self.netGName:lossFuncG, self.netDName:self.wassersteinDistance},
-            loss_weights = [lossRatio, 1], metrics = {self.netGName:lossFuncG, self.netDName:lossFuncD})
-        self.netD.compile(optimizer = Adam(lr = self.learningRateD), loss = self.wassersteinDistance, metrics = [lossFuncD])
+        self.netA.compile(optimizer = RMSprop(lr = self.learningRateG), loss = {self.netGName:lossFuncG, self.netDName:self.wassersteinDistance},
+        loss_weights = [lossRatio, 1], metrics = {self.netGName:lossFuncG, self.netDName:lossFuncD})
+        self.netD.trainable = True
+        self.netD.compile(optimizer = RMSprop(lr = self.learningRateD), loss = self.wassersteinDistance, metrics = [lossFuncD])
         print(self.netA.metrics_names)
+        self.netG.summary()
         self.netD.summary()
-        self.netDA.summary()
+        self.netA.summary()
 
     def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, batchSize = 10, valSplit = 0.2, savingInterval = 50, netGOnlyEpochs = 25, continueTrain = False,
     preTrainedGPath = None):
@@ -344,13 +361,6 @@ class GAN(object):
         np.save(modelPath + 'loss', lossRecorder)
         print('training completed')
 
-    def wassersteinDistance(self, src1, src2):
-        dst = K.mean(src1*src2)
-        return dst
-
-    def gradientPenaltyLoss(self, ):
-        return dst
-
 def squeeze(src):
     dst = tf.squeeze(src, [1])
     return dst
@@ -367,4 +377,11 @@ def randomlyWeightedAverage(src1, src2):
     length = src1.shape[0]
     weights = K.random_uniform((length, 1, 1, 1), minval = 0., maxval = 1.)
     dst = (weights*src1) + ((1-weights)*src2)
+    return dst
+
+def wassersteinDistance(self, src1, src2):
+    dst = K.mean(src1*src2)
+    return dst
+
+def gradientPenaltyLoss(self, ):
     return dst
