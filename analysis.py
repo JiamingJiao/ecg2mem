@@ -4,4 +4,9 @@
 import cv2 as cv
 import dataProc
 
-def drawHistogram(src, dst):
+def histogramMatchingArray(src1, src2, dst):
+    return dst
+
+def calculateHistogram(src):
+    return dst
+

@@ -338,8 +338,8 @@ class GAN(object):
                 memLocal = memTrain[currentBatch:currentBatch+self.batchSize, :]
                 randomIndex = np.random.randint(low = 0, high = dataLength-6, size = trainingRatio, dtype = np.int32)
                 for i in range(0, trainingRatio):
-                    extraForD = extraTrain[randomIndex[i]:randomIndex+5]
-                    memForD = memTrain[randomIndex[i]:randomIndex+5]
+                    extraForD = extraTrain[randomIndex[i]:randomIndex[i]+5]
+                    memForD = memTrain[randomIndex[i]:randomIndex[i]+5]
                     lossD = self.penalizedNetD.train_on_batch([extraForD, memForD], [labelReal, labelFake, dummyMem])
                 lossA = self.netA.train_on_batch(extraLocal, [memLocal, labelReal])
                 lossRecorder[lossCounter, 0] = lossD[0]
