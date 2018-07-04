@@ -17,8 +17,10 @@ def npyToPng(srcPath, dstPath):
     print('completed')
 
 def loadData(srcPath, startNum = 0, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, imgCols = 256, normalization = 0, normalizationRange = [0., 1.],
-dstDataType = np.float64):
+approximateData = True):
     fileName = glob.glob(srcPath + '*.npy')
+    lowerBound = normalizationRange[0]
+    upperBound = normalizationRange[1]
     if resize == 0:
         mergeImg = np.ndarray((len(fileName), rawRows, rawCols), dtype = np.float64)
     else:
@@ -33,16 +35,16 @@ dstDataType = np.float64):
         else:
             mergeImg[i] = rawImg
         startNum += 1
-    if dstDataType == np.uint8:
+    if approximateData == True:
+        min = np.amin(mergeImg)
+        max = np.amax(mergeImg)
+        mergeImg = 255*(mergeImg-min)/(max-min)
+        mergeImg = np.around(mergeImg)
         normalization = 1
-        normalizationRange = [0, 255]
     if normalization == 1:
         min = np.amin(mergeImg)
         max = np.amax(mergeImg)
-        mergeImg = normalizationRange[0] + ((mergeImg-min)*(normalizationRange[1]-normalizationRange[0]))/(max-min)
-    if dstDataType == np.uint8:
-        mergeImg = np.around(mergeImg)
-        mergeImg = mergeImg.astype(np.uint8)
+        mergeImg = lowerBound + ((mergeImg-min)*(upperBound-lowerBound))/(max-min)
     return mergeImg
 
 # generate full size pseudo-ECG maps, and downsample them if it is necessary

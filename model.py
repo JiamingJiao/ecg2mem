@@ -294,21 +294,21 @@ class GAN(object):
         self.netA.summary()
 
     def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, valSplit = 0.2, savingInterval = 50, netGOnlyEpochs = 25, continueTrain = False,
-    preTrainedGPath = None):
+    preTrainedGPath = None, approximateData = True):
         if self.activationG == 'tanh':
             dataRange = [-1., 1.]
         else:
             dataRange = [0., 1.]
         if self.netGName == 'uNet':
-            extraSequence = dataProc.loadData(srcPath = extraPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange)
+            extraSequence = dataProc.loadData(srcPath = extraPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
             extraSequence = extraSequence.reshape((extraSequence.shape[0], self.imgRows, self.imgCols, self.channels))
             extraTrain = extraSequence
         elif self.netGName == 'uNet3D':
-            extraSequence = dataProc.loadData(srcPath = extraPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange)
-            extraTrain = dataProc.create3DData(extraSequence, temporalDepth = self.temporalDepth)
+            extraSequence = dataProc.loadData(srcPath = extraPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
+            extraTrain = dataProc.create3DData(extraSequence, temporalDepth = self.temporalDepth, approximateData = approximateData)
             extraTrain = extraTrain.reshape((extraTrain.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels))
             extraSequence = extraSequence.reshape((extraSequence.shape[0], self.imgRows, self.imgCols, self.channels))
-        memTrain = dataProc.loadData(srcPath = memPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange)
+        memTrain = dataProc.loadData(srcPath = memPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
         memTrain = memTrain.reshape((memTrain.shape[0], self.imgRows, self.imgCols, self.channels))
         print(extraTrain.shape)
         lossRecorder = np.ndarray((round(extraTrain.shape[0]/self.batchSize)*epochsNum, 2), dtype = np.float32)
@@ -340,26 +340,26 @@ class GAN(object):
                 extraForD = np.concatenate((extraSequence[currentBatch:currentBatch+self.batchSize, :], extraSequence[currentBatch:currentBatch+self.batchSize, :]),
                 axis = 0)
                 extraAndMem = np.concatenate((extraForD, realAndFake), axis = -1)
-                lossD = self.penalizedNetD.train_on_batch([extraLocal, memLocal], [labelReal, labelFake, dummyFake])
+                lossD = self.penalizedNetD.train_on_batch([extraLocal, memLocal], [labelReal, labelFake, dummyMem])
                 lossA = self.netA.train_on_batch(extraLocal, [memLocal, labelReal])
                 lossRecorder[lossCounter, 0] = lossD[0]
                 lossRecorder[lossCounter, 1] = lossA[0]
                 lossCounter += 1
                 lossDStr = 'lossD is ' + lossD[0].astype(np.str) + ' '
-                AccDStr = 'AccD is ' + lossD[1].astype(np.str) + ' '
+                lossDOnRealStr = 'lossD on real is ' + lossD[1].astype(np.str) + ' '
+                lossDOnFakeStr = 'lossD on fake is ' + lossD[2].astype(np.str) + ' '
+                lossDOnPenalty = 'lossD on penalty is ' + lossD[3].astype(np.str) + ' '
                 lossAStr = 'lossA is ' + lossA[0].astype(np.str) + ' '
                 lossGStr = 'lossG is ' + lossA[1].astype(np.str) + ' '
-                lossDAStr = 'lossDA is ' + lossA[2].astype(np.str) + ' '
-                #AccGStr = 'AccG is ' + lossA[3].astype(np.str) + ' '
-                #AccDAStr = 'AccDA is ' + lossA[4].astype(np.str)
-                msg = 'epoch of ' + '%d '%(currentEpoch+1) + 'batch of ' + '%d '%(currentBatch/self.batchSize+1) + lossDStr + AccDStr + lossAStr + lossGStr \
-                + lossDAStr + AccGStr + AccDAStr
+                lossDInA = 'lossD in A is ' + lossA[2].astype(np.str) + ' '
+                msg = 'epoch of ' + '%d '%(currentEpoch+1) + 'batch of ' + '%d '%(currentBatch/self.batchSize+1) + lossDStr + lossDOnRealStr + lossDOnFakeStr \
+                + lossDOnPenalty + lossAStr + lossGStr + lossDInA
                 print(msg)
-                if (minLossG > lossA[2]):
+                if (minLossG > lossA[1]):
                     weightsNetGPath = modelPath + 'netG_latest.h5'
                     self.netG.save_weights(weightsNetGPath, overwrite = True)
                     #netA.save_weights(weightsNetAPath, overwrite = True)
-                    minLossG = lossA[2]
+                    minLossG = lossA[1]
                     savingStamp = (currentEpoch+1, round(currentBatch/self.batchSize+1))
             if (currentEpoch % savingInterval == (savingInterval-1)) and (currentEpoch != epochsNum-1):
                 os.rename(modelPath+'netG_latest.h5', modelPath+'netG_%d_epochs.h5'%savingStamp[0])
