@@ -294,7 +294,7 @@ class GAN(object):
         self.netA.summary()
 
     def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, valSplit = 0.2, savingInterval = 50, netGOnlyEpochs = 25, continueTrain = False,
-    preTrainedGPath = None, approximateData = True, trainingRatio = 5):
+    preTrainedGPath = None, approximateData = True, trainingRatio = 5, earlyStoppingPatience = 10):
         if self.activationG == 'tanh':
             dataRange = [-1., 1.]
         else:
@@ -314,7 +314,7 @@ class GAN(object):
         lossRecorder = np.ndarray((round(extraTrain.shape[0]/self.batchSize)*epochsNum, 2), dtype = np.float32)
         lossCounter = 0
         minLossG = 10000.0
-        savingStamp =(0, 0)
+        savingStamp = 0
         weightsNetGPath = modelPath + 'netG_GOnly.h5'
         weightsNetAPath = modelPath + 'netA_latest.h5'
         self.netG.compile(optimizer = Adam(lr = self.learningRateG), loss = self.lossFuncG, metrics = [self.lossFuncG])
@@ -330,6 +330,7 @@ class GAN(object):
         labelFake = -np.ones((self.batchSize), dtype = np.float64)
         dummyMem = np.zeros((self.batchSize), dtype = np.float64)
         dataLength = len(extraTrain)
+        earlyStoppingCounter = 0
         for currentEpoch in range(netGOnlyEpochs, epochsNum):
             for currentBatch in range(0, dataLength, self.batchSize):
                 if (currentEpoch == netGOnlyEpochs) and (currentBatch == 0):
@@ -355,14 +356,33 @@ class GAN(object):
                 msg = 'epoch of ' + '%d '%(currentEpoch+1) + 'batch of ' + '%d '%(currentBatch/self.batchSize+1) + lossDStr + lossDOnRealStr + lossDOnFakeStr \
                 + lossDOnPenalty + lossAStr + lossGStr + lossDInA
                 print(msg)
+                """
                 if (minLossG > lossA[1]):
                     weightsNetGPath = modelPath + 'netG_latest.h5'
                     self.netG.save_weights(weightsNetGPath, overwrite = True)
                     #netA.save_weights(weightsNetAPath, overwrite = True)
                     minLossG = lossA[1]
                     savingStamp = (currentEpoch+1, round(currentBatch/self.batchSize+1))
+                """
+            #validate the model
+            valSize = math.floor(dataLength*valSplit)
+            randomIndexVal = np.random.randint(low = 0, high = dataLength-valSize-1, size = 1, dtype = np.int32)
+            extraVal = extraTrain[randomIndexVal[0]:randomIndexVal[0]+valSize]
+            realMemVal = memTrain[randomIndexVal[0]:randomIndexVal[0]+valSize]
+            lossVal = self.netG.evaluate(x = extraVal, y = realMemVal, batch_size = batchSize, verbose = 0)
+            if (minLossG > lossVal[0]):
+                weightsNetGPath = modelPath + 'netG_latest.h5'
+                self.netG.save_weights(weightsNetGPath, overwrite = True)
+                minLossG = lossVal[0]
+                earlyStoppingCounter = 0
+                savingStamp = currentEpoch+1
+            """
             if (currentEpoch % savingInterval == (savingInterval-1)) and (currentEpoch != epochsNum-1):
-                os.rename(modelPath+'netG_latest.h5', modelPath+'netG_%d_epochs.h5'%savingStamp[0])
+                os.rename(modelPath+'netG_latest.h5', modelPath+'netG_%d_epochs.h5'%savingStamp)
+            """
+            earlyStoppingCounter += 1
+            if earlyStoppingCounter == earlyStoppingPatience:
+                break
         np.save(modelPath + 'loss', lossRecorder)
         print('training completed')
 
