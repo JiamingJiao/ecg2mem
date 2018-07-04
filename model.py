@@ -226,7 +226,7 @@ class networks(object):
 
 class GAN(object):
     def __init__(self, imgRows = 256, imgCols = 256, rawRows = 200, rawCols = 200, channels = 1, netDName = None, netGName = None, temporalDepth = None, uNetconnections = 1,
-    activationG = 'sigmoid', lossFuncD = 'categorical_crossentropy', lossFuncG = 'mae', gradientPenaltyWeight = 10, lossRatio = 100, learningRateG = 1e-4, learningRateD = 1e-4):
+    activationG = 'relu', lossFuncG = 'mae', gradientPenaltyWeight = 10, lossRatio = 100, learningRateG = 1e-4, learningRateD = 1e-4, batchSize = 5):
         self.imgRows = imgRows
         self.imgCols = imgCols
         self.rawRows = rawRows
@@ -239,6 +239,7 @@ class GAN(object):
         self.learningRateG = learningRateG
         self.learningRateD = learningRateD
         self.activationG = activationG
+        self.batchSize = batchSize
         self.network = networks(imgRows = self.imgRows, imgCols = self.imgCols, channels = self.channels, temporalDepth = self.temporalDepth, activationG = self.activationG)
         if self.netDName == 'straight3':
             self.netD = self.network.straight3()
@@ -250,7 +251,7 @@ class GAN(object):
             self.netG = self.network.uNet(connections = uNetconnections)
             self.netG.trainable = False
             inputsGForGradient = Input((self.imgRows, self.imgCols, self.channels))
-            outputsGForGradient = sef.netG(inputsGForGradient)
+            outputsGForGradient = self.netG(inputsGForGradient)
             realPair = Concatenate(axis = -1)([inputsGForGradient, real])
             fakePair = Concatenate(axis = -1)([inputsGForGradient, outputsGForGradient])
         elif self.netGName == 'uNet3D':
@@ -261,34 +262,39 @@ class GAN(object):
             outputsGForGradient = self.netG(inputsGForGradient)
         outputsDOnReal = self.netD(realPair)
         outputsDOnFake = self.netD(fakePair)
-        averagedSamples = Lambda(randomlyWeightedAverage, output_shape = (self.imgRows, self.imgCols, self.channels*2))(realPair, fakePair)
-        gradientPenaltyLoss = functools.partial(calculateGradientPenaltyLoss, averageSamples = averagedSamples, weight = gradientPenaltyWeight)
-        self.penalizedNetD = Model(inputs = [real, inputsGForGradient], outputs = [outputsDOnReal, outputsDOnFake, ])
+        averagedRealFake = Lambda(self.randomlyWeightedAverage, output_shape = (self.imgRows, self.imgCols, self.channels*2))([realPair, fakePair])
+        outputsDOnAverage = self.netD(averagedRealFake)
+        gradientPenaltyLoss = functools.partial(calculateGradientPenaltyLoss, samples = averagedRealFake, weight = gradientPenaltyWeight)
+        gradientPenaltyLoss.__name__ = 'gradientPenalty'
+        self.penalizedNetD = Model(inputs = [real, inputsGForGradient], outputs = [outputsDOnReal, outputsDOnFake, outputsDOnAverage])
+        wassersteinDistance.__name__ = 'wassertein'
+        self.penalizedNetD.compile(optimizer = RMSprop(lr = self.learningRateD), loss = [wassersteinDistance, wassersteinDistance, gradientPenaltyLoss])
+        print(self.penalizedNetD.metrics_names)
         #build adversarial network
+        self.netG.trainable = True
+        self.netD.trainable = False
         if self.netGName == 'uNet':
-            self.netG = self.network.uNet(connections = uNetconnections)
             inputsA = Input((self.imgRows, self.imgCols, self.channels))
-            outputG = self.netG(inputsA)
-            inputD = Concatenate(axis = -1)([inputsA, outputG])
+            outputsG = self.netG(inputsA)
+            inputsD = Concatenate(axis = -1)([inputsA, outputsG])
         elif self.netGName == 'uNet3D':
             self.netG = self.network.uNet3D()
             inputsA = Input((self.temporalDepth, self.imgRows, self.imgCols, self.channels))
-            outputG = self.netG(inputsA)
+            outputsG = self.netG(inputsA)
             middleLayerOfInputs = Lambda(slice, output_shape = (1, self.imgRows, self.imgCols, self.channels))(inputsA)
             middleLayerOfInputs = Lambda(squeeze, output_shape = (self.imgRows, self.imgCols, self.channels))(middleLayerOfInputs)
-            inputD = Concatenate(axis = -1)([middleLayerOfInputs, outputG])
-        outputD = self.netD(inputD)
-        self.netA = Model(input = inputsA, output =[outputG, outputD], name = 'netA')
-        self.netA.compile(optimizer = RMSprop(lr = self.learningRateG), loss = {self.netGName:lossFuncG, self.netDName:self.wassersteinDistance},
-        loss_weights = [lossRatio, 1], metrics = {self.netGName:lossFuncG, self.netDName:lossFuncD})
-        self.netD.trainable = True
-        self.netD.compile(optimizer = RMSprop(lr = self.learningRateD), loss = self.wassersteinDistance, metrics = [lossFuncD])
+            inputsD = Concatenate(axis = -1)([middleLayerOfInputs, outputsG])
+        outputsD = self.netD(inputsD)
+        self.netA = Model(input = inputsA, output =[outputsG, outputsD], name = 'netA')
+        self.netA.compile(optimizer = RMSprop(lr = self.learningRateG), loss = [lossFuncG, wassersteinDistance],
+        loss_weights = [lossRatio, 1], metrics = [lossFuncG, wassersteinDistance])
         print(self.netA.metrics_names)
         self.netG.summary()
         self.netD.summary()
+        self.penalizedNetD.summary()
         self.netA.summary()
 
-    def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, batchSize = 10, valSplit = 0.2, savingInterval = 50, netGOnlyEpochs = 25, continueTrain = False,
+    def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, valSplit = 0.2, savingInterval = 50, netGOnlyEpochs = 25, continueTrain = False,
     preTrainedGPath = None):
         if self.activationG == 'tanh':
             dataRange = [-1., 1.]
@@ -306,7 +312,7 @@ class GAN(object):
         memTrain = dataProc.loadData(srcPath = memPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange)
         memTrain = memTrain.reshape((memTrain.shape[0], self.imgRows, self.imgCols, self.channels))
         print(extraTrain.shape)
-        lossRecorder = np.ndarray((round(extraTrain.shape[0]/batchSize)*epochsNum, 2), dtype = np.float32)
+        lossRecorder = np.ndarray((round(extraTrain.shape[0]/self.batchSize)*epochsNum, 2), dtype = np.float32)
         lossCounter = 0
         minLossG = 10000.0
         savingStamp =(0, 0)
@@ -316,23 +322,24 @@ class GAN(object):
         if continueTrain == False:
             checkpointer = ModelCheckpoint(weightsNetGPath, monitor = 'val_loss', verbose = 1, save_best_only = True, save_weights_only = True, mode = 'min')
             print('begin to train G')
-            trainingHistoryG = self.netG.fit(x = extraTrain, y = memTrain, batch_size = batchSize*2, epochs = netGOnlyEpochs, verbose = 2,callbacks = [checkpointer],
+            trainingHistoryG = self.netG.fit(x = extraTrain, y = memTrain, batch_size = self.batchSize*2, epochs = netGOnlyEpochs, verbose = 2,callbacks = [checkpointer],
             validation_split = valSplit)
         elif continueTrain == True:
             preTrainedGPath = preTrainedGPath + 'netG_GOnly.h5'
             self.netG.load_weights(preTrainedGPath)
-        labelD = np.ones((batchSize*2), dtype = np.float64)
-        labelD[0:batchSize] = -1
-        labelA = np.ones((batchSize), dtype = np.float64)
+        labelD = np.ones((self.batchSize*2), dtype = np.float64)
+        labelD[0:self.batchSize] = -1
+        labelA = np.ones((self.batchSize), dtype = np.float64)
         for currentEpoch in range(netGOnlyEpochs, epochsNum):
-            for currentBatch in range(0, len(extraTrain), batchSize):
+            for currentBatch in range(0, len(extraTrain), self.batchSize):
                 if (currentEpoch == netGOnlyEpochs) and (currentBatch == 0):
                     print('begin to train GAN')
-                extraLocal = extraTrain[currentBatch:currentBatch+batchSize, :]
-                memLocal = memTrain[currentBatch:currentBatch+batchSize, :]
+                extraLocal = extraTrain[currentBatch:currentBatch+self.batchSize, :]
+                memLocal = memTrain[currentBatch:currentBatch+self.batchSize, :]
                 memFake = self.netG.predict_on_batch(extraLocal)
                 realAndFake = np.concatenate((memLocal,memFake), axis = 0)
-                extraForD = np.concatenate((extraSequence[currentBatch:currentBatch+batchSize, :], extraSequence[currentBatch:currentBatch+batchSize, :]), axis = 0)
+                extraForD = np.concatenate((extraSequence[currentBatch:currentBatch+self.batchSize, :], extraSequence[currentBatch:currentBatch+self.batchSize, :]),
+                axis = 0)
                 extraAndMem = np.concatenate((extraForD, realAndFake), axis = -1)
                 lossD = self.netD.train_on_batch(extraAndMem, labelD)
                 self.netDA.set_weights(self.netD.get_weights())
@@ -347,7 +354,7 @@ class GAN(object):
                 lossDAStr = 'lossDA is ' + lossA[2].astype(np.str) + ' '
                 AccGStr = 'AccG is ' + lossA[3].astype(np.str) + ' '
                 AccDAStr = 'AccDA is ' + lossA[4].astype(np.str)
-                msg = 'epoch of ' + '%d '%(currentEpoch+1) + 'batch of ' + '%d '%(currentBatch/batchSize+1) + lossDStr + AccDStr + lossAStr + lossGStr \
+                msg = 'epoch of ' + '%d '%(currentEpoch+1) + 'batch of ' + '%d '%(currentBatch/self.batchSize+1) + lossDStr + AccDStr + lossAStr + lossGStr \
                 + lossDAStr + AccGStr + AccDAStr
                 print(msg)
                 if (minLossG > lossA[2]):
@@ -355,11 +362,16 @@ class GAN(object):
                     self.netG.save_weights(weightsNetGPath, overwrite = True)
                     #netA.save_weights(weightsNetAPath, overwrite = True)
                     minLossG = lossA[2]
-                    savingStamp = (currentEpoch+1, round(currentBatch/batchSize+1))
+                    savingStamp = (currentEpoch+1, round(currentBatch/self.batchSize+1))
             if (currentEpoch % savingInterval == (savingInterval-1)) and (currentEpoch != epochsNum-1):
                 os.rename(modelPath+'netG_latest.h5', modelPath+'netG_%d_epochs.h5'%savingStamp[0])
         np.save(modelPath + 'loss', lossRecorder)
         print('training completed')
+
+    def randomlyWeightedAverage(self, src):
+        weights = K.random_uniform((self.batchSize, 1, 1, 1), minval = 0., maxval = 1.)
+        dst = (weights*src[0]) + ((1-weights)*src[1])
+        return dst
 
 def squeeze(src):
     dst = tf.squeeze(src, [1])
@@ -369,14 +381,6 @@ def slice(src):
     srcShape = src.shape.as_list()
     middleLayer = math.floor(srcShape[1]/2.0)
     dst = tf.slice(src, [0, middleLayer, 0, 0, 0], [-1, 1, -1, -1, -1])
-    print(srcShape)
-    print(dst.shape)
-    return dst
-
-def randomlyWeightedAverage(src1, src2):
-    length = src1.shape[0]
-    weights = K.random_uniform((length, 1, 1, 1), minval = 0., maxval = 1.)
-    dst = (weights*src1) + ((1-weights)*src2)
     return dst
 
 def wassersteinDistance(src1, src2):
@@ -384,11 +388,11 @@ def wassersteinDistance(src1, src2):
     return dst
 
 def calculateGradientPenaltyLoss(true, prediction, samples, weight):
-    gradients = K.gradient(prediction, samples)[0]
+    gradients = K.gradients(prediction, samples)[0]
     gradientsSqr = K.square(gradients)
     gradientsSqrSum = K.sum(gradientsSqr, axis = np.arange(1, len(gradientsSqr.shape)))
     gradientsL2Norm = K.sqrt(gradientsSqrSum)
-    penalty = weight*K.square(1-gradientL2Norm)
+    penalty = weight*K.square(1-gradientsL2Norm)
     print(penalty.shape)
     averagePenalty = K.mean(penalty, axis = 0)
     return averagePenalty
