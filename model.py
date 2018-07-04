@@ -266,7 +266,7 @@ class GAN(object):
         outputsDOnAverage = self.netD(averagedRealFake)
         gradientPenaltyLoss = functools.partial(calculateGradientPenaltyLoss, samples = averagedRealFake, weight = gradientPenaltyWeight)
         gradientPenaltyLoss.__name__ = 'gradientPenalty'
-        self.penalizedNetD = Model(inputs = [real, inputsGForGradient], outputs = [outputsDOnReal, outputsDOnFake, outputsDOnAverage])
+        self.penalizedNetD = Model(inputs = [inputsGForGradient, real], outputs = [outputsDOnReal, outputsDOnFake, outputsDOnAverage])
         wassersteinDistance.__name__ = 'wassertein'
         self.penalizedNetD.compile(optimizer = RMSprop(lr = self.learningRateD), loss = [wassersteinDistance, wassersteinDistance, gradientPenaltyLoss])
         print(self.penalizedNetD.metrics_names)
@@ -286,8 +286,7 @@ class GAN(object):
             inputsD = Concatenate(axis = -1)([middleLayerOfInputs, outputsG])
         outputsD = self.netD(inputsD)
         self.netA = Model(input = inputsA, output =[outputsG, outputsD], name = 'netA')
-        self.netA.compile(optimizer = RMSprop(lr = self.learningRateG), loss = [lossFuncG, wassersteinDistance],
-        loss_weights = [lossRatio, 1], metrics = [lossFuncG, wassersteinDistance])
+        self.netA.compile(optimizer = RMSprop(lr = self.learningRateG), loss = [lossFuncG, wassersteinDistance], loss_weights = [lossRatio, 1])
         print(self.netA.metrics_names)
         self.netG.summary()
         self.netD.summary()
@@ -327,9 +326,9 @@ class GAN(object):
         elif continueTrain == True:
             preTrainedGPath = preTrainedGPath + 'netG_GOnly.h5'
             self.netG.load_weights(preTrainedGPath)
-        labelD = np.ones((self.batchSize*2), dtype = np.float64)
-        labelD[0:self.batchSize] = -1
-        labelA = np.ones((self.batchSize), dtype = np.float64)
+        labelReal = np.ones((self.batchSize), dtype = np.float64)
+        labelFake = -labelReal
+        dummyMem = np.zeros((self.batchSize), dtype = np.float64)
         for currentEpoch in range(netGOnlyEpochs, epochsNum):
             for currentBatch in range(0, len(extraTrain), self.batchSize):
                 if (currentEpoch == netGOnlyEpochs) and (currentBatch == 0):
@@ -341,9 +340,8 @@ class GAN(object):
                 extraForD = np.concatenate((extraSequence[currentBatch:currentBatch+self.batchSize, :], extraSequence[currentBatch:currentBatch+self.batchSize, :]),
                 axis = 0)
                 extraAndMem = np.concatenate((extraForD, realAndFake), axis = -1)
-                lossD = self.netD.train_on_batch(extraAndMem, labelD)
-                self.netDA.set_weights(self.netD.get_weights())
-                lossA = self.netA.train_on_batch(extraLocal, [memLocal, labelA])
+                lossD = self.penalizedNetD.train_on_batch([extraLocal, memLocal], [labelReal, labelFake, dummyFake])
+                lossA = self.netA.train_on_batch(extraLocal, [memLocal, labelReal])
                 lossRecorder[lossCounter, 0] = lossD[0]
                 lossRecorder[lossCounter, 1] = lossA[0]
                 lossCounter += 1
@@ -352,8 +350,8 @@ class GAN(object):
                 lossAStr = 'lossA is ' + lossA[0].astype(np.str) + ' '
                 lossGStr = 'lossG is ' + lossA[1].astype(np.str) + ' '
                 lossDAStr = 'lossDA is ' + lossA[2].astype(np.str) + ' '
-                AccGStr = 'AccG is ' + lossA[3].astype(np.str) + ' '
-                AccDAStr = 'AccDA is ' + lossA[4].astype(np.str)
+                #AccGStr = 'AccG is ' + lossA[3].astype(np.str) + ' '
+                #AccDAStr = 'AccDA is ' + lossA[4].astype(np.str)
                 msg = 'epoch of ' + '%d '%(currentEpoch+1) + 'batch of ' + '%d '%(currentBatch/self.batchSize+1) + lossDStr + AccDStr + lossAStr + lossGStr \
                 + lossDAStr + AccGStr + AccDAStr
                 print(msg)
