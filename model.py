@@ -294,7 +294,7 @@ class GAN(object):
         self.netA.summary()
 
     def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, valSplit = 0.2, savingInterval = 50, netGOnlyEpochs = 25, continueTrain = False,
-    preTrainedGPath = None, approximateData = True):
+    preTrainedGPath = None, approximateData = True, trainingRatio = 5):
         if self.activationG == 'tanh':
             dataRange = [-1., 1.]
         else:
@@ -327,20 +327,20 @@ class GAN(object):
             preTrainedGPath = preTrainedGPath + 'netG_GOnly.h5'
             self.netG.load_weights(preTrainedGPath)
         labelReal = np.ones((self.batchSize), dtype = np.float64)
-        labelFake = -labelReal
+        labelFake = -np.ones((self.batchSize), dtype = np.float64)
         dummyMem = np.zeros((self.batchSize), dtype = np.float64)
+        dataLength = len(extraTrain)
         for currentEpoch in range(netGOnlyEpochs, epochsNum):
-            for currentBatch in range(0, len(extraTrain), self.batchSize):
+            for currentBatch in range(0, dataLength, self.batchSize):
                 if (currentEpoch == netGOnlyEpochs) and (currentBatch == 0):
                     print('begin to train GAN')
                 extraLocal = extraTrain[currentBatch:currentBatch+self.batchSize, :]
                 memLocal = memTrain[currentBatch:currentBatch+self.batchSize, :]
-                memFake = self.netG.predict_on_batch(extraLocal)
-                realAndFake = np.concatenate((memLocal,memFake), axis = 0)
-                extraForD = np.concatenate((extraSequence[currentBatch:currentBatch+self.batchSize, :], extraSequence[currentBatch:currentBatch+self.batchSize, :]),
-                axis = 0)
-                extraAndMem = np.concatenate((extraForD, realAndFake), axis = -1)
-                lossD = self.penalizedNetD.train_on_batch([extraLocal, memLocal], [labelReal, labelFake, dummyMem])
+                randomIndex = np.random.randint(low = 0, high = dataLength-6, size = trainingRatio, dtype = np.int32)
+                for i in range(0, trainingRatio):
+                    extraForD = extraTrain[randomIndex[i]:randomIndex+5]
+                    memForD = memTrain[randomIndex[i]:randomIndex+5]
+                    lossD = self.penalizedNetD.train_on_batch([extraForD, memForD], [labelReal, labelFake, dummyMem])
                 lossA = self.netA.train_on_batch(extraLocal, [memLocal, labelReal])
                 lossRecorder[lossCounter, 0] = lossD[0]
                 lossRecorder[lossCounter, 1] = lossA[0]
