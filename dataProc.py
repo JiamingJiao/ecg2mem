@@ -6,6 +6,7 @@ import cv2 as cv
 import glob
 import shutil
 import math
+import random
 
 def npyToPng(srcPath, dstPath):
     npy = loadData(srcPath)
@@ -17,7 +18,7 @@ def npyToPng(srcPath, dstPath):
     print('completed')
 
 def loadData(srcPath, startNum = 0, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, imgCols = 256, normalization = 0, normalizationRange = [0., 1.],
-approximateData = True):
+approximateData = False):
     fileName = glob.glob(srcPath + '*.npy')
     lowerBound = normalizationRange[0]
     upperBound = normalizationRange[1]
@@ -159,3 +160,17 @@ def renameData(*srcPath,  dstPath, potentialName = 'phie'):
         for j in range(0, fileNum):
             shutil.copy(srcPath[i] + potentialName + '_%04d'%j + '.npy', dstPath + '%06d'%dstDataID + '.npy', follow_symlinks = False)
             dstDataID += 1
+
+def clipData(srcPath, dstPath, bounds = [0., 1.]):
+    src = loadData(srcPath)
+    dst = np.clip(src, bounds[0], bounds[1])
+    for i in range(0, src.shape[0]):
+        dstFileName = dstPath + '%06d'%i
+        np.save(dstFileName, dst[i])
+'''
+def splitTrainAndVal(src, valSplit):
+    valNum = math.floor(valSplit*src[0].shape[0]+0.1)
+    randomIndices = random.sample(np.arrange(0, src[0].shape[0]-1), valNum)
+    for i in range(0,len(src)):
+        valArray[0] =
+'''

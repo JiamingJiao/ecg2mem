@@ -310,7 +310,7 @@ class GAN(object):
             extraSequence = extraSequence.reshape((extraSequence.shape[0], self.imgRows, self.imgCols, self.channels))
         memTrain = dataProc.loadData(srcPath = memPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
         memTrain = memTrain.reshape((memTrain.shape[0], self.imgRows, self.imgCols, self.channels))
-        print(extraTrain.shape)
+
         lossRecorder = np.ndarray((round(extraTrain.shape[0]/self.batchSize)*epochsNum, 2), dtype = np.float32)
         lossCounter = 0
         minLossG = 10000.0
