@@ -356,14 +356,6 @@ class GAN(object):
                 msg = 'epoch of ' + '%d '%(currentEpoch+1) + 'batch of ' + '%d '%(currentBatch/self.batchSize+1) + lossDStr + lossDOnRealStr + lossDOnFakeStr \
                 + lossDOnPenalty + lossAStr + lossGStr + lossDInA
                 print(msg)
-                """
-                if (minLossG > lossA[1]):
-                    weightsNetGPath = modelPath + 'netG_latest.h5'
-                    self.netG.save_weights(weightsNetGPath, overwrite = True)
-                    #netA.save_weights(weightsNetAPath, overwrite = True)
-                    minLossG = lossA[1]
-                    savingStamp = (currentEpoch+1, round(currentBatch/self.batchSize+1))
-                """
             #validate the model
             valSize = math.floor(dataLength*valSplit)
             randomIndexVal = np.random.randint(low = 0, high = dataLength-valSize-1, size = 1, dtype = np.int32)
@@ -376,10 +368,8 @@ class GAN(object):
                 minLossG = lossVal[0]
                 earlyStoppingCounter = 0
                 savingStamp = currentEpoch+1
-            """
             if (currentEpoch % savingInterval == (savingInterval-1)) and (currentEpoch != epochsNum-1):
                 os.rename(modelPath+'netG_latest.h5', modelPath+'netG_%d_epochs.h5'%savingStamp)
-            """
             earlyStoppingCounter += 1
             if earlyStoppingCounter == earlyStoppingPatience:
                 break
