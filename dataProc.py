@@ -167,10 +167,17 @@ def clipData(srcPath, dstPath, bounds = [0., 1.]):
     for i in range(0, src.shape[0]):
         dstFileName = dstPath + '%06d'%i
         np.save(dstFileName, dst[i])
-'''
+
 def splitTrainAndVal(src, valSplit):
     valNum = math.floor(valSplit*src[0].shape[0]+0.1)
     randomIndices = random.sample(np.arrange(0, src[0].shape[0]-1), valNum)
+    trainDataShape = np.ndarray((src.ndim), dtype = np.uint8)
+    valDataShape = np.ndarray((src.ndim), dtype = np.uint8)
+    trainDataShape[0] = src.shape[0] - valNum
+    valDataShape[0] = valNum
+    for i in range(1, src.ndim):
+        trainDataShape[i] = src.shape[i]
+        valDataShape[i] = src.shape[i]
+    dst = [np.ndarray((), dtype = src.dtype), ]
     for i in range(0,len(src)):
-        valArray[0] =
-'''
+        dst = np.take
