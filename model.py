@@ -8,6 +8,7 @@ import glob
 import keras
 import math
 import functools
+import datetime
 import tensorflow as tf
 import keras.backend as K
 from keras.models import *
@@ -299,19 +300,19 @@ class GAN(object):
             dataRange = [-1., 1.]
         else:
             dataRange = [0., 1.]
+        extraRaw = dataProc.loadData(srcPath = extraPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
         if self.netGName == 'uNet':
-            extraSequence = dataProc.loadData(srcPath = extraPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
-            extraSequence = extraSequence.reshape((extraSequence.shape[0], self.imgRows, self.imgCols, self.channels))
-            extraTrain = extraSequence
+            extraSequence = np.ndarray((extraRaw.shape[0], self.imgRows, self.imgCols, self.channels), dtype = np.float64)
+            extraSequence = extraRaw.reshape((extraRaw.shape[0], self.imgRows, self.imgCols, self.channels))
         elif self.netGName == 'uNet3D':
-            extraSequence = dataProc.loadData(srcPath = extraPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
-            extraTrain = dataProc.create3DData(extraSequence, temporalDepth = self.temporalDepth, approximateData = approximateData)
-            extraTrain = extraTrain.reshape((extraTrain.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels))
-            extraSequence = extraSequence.reshape((extraSequence.shape[0], self.imgRows, self.imgCols, self.channels))
-        memTrain = dataProc.loadData(srcPath = memPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
-        memTrain = memTrain.reshape((memTrain.shape[0], self.imgRows, self.imgCols, self.channels))
-
-        lossRecorder = np.ndarray((round(extraTrain.shape[0]/self.batchSize)*epochsNum, 2), dtype = np.float32)
+            extraSequence = np.ndarray((extraRaw.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels), dtype = np.float64)
+            extraRaw = dataProc.create3DData(extraRaw, temporalDepth = self.temporalDepth)
+            extraSequence = extraRaw.reshape((extraSequence.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels))
+        memRaw = dataProc.loadData(srcPath = memPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
+        memSequence = np.ndarray((memRaw.shape[0], self.imgRows, self.imgCols, self.channels), dtype = np.float64)
+        memSequence = memRaw.reshape((memRaw.shape[0], self.imgRows, self.imgCols, self.channels))
+        trainingDataLength = math.floor((1-valSplit)*extraSequence.shape[0]+0.1)
+        lossRecorder = np.ndarray((math.floor(trainingDataLength/self.batchSize + 0.1)*epochsNum, 2), dtype = np.float64)
         lossCounter = 0
         minLossG = 10000.0
         savingStamp = 0
@@ -321,7 +322,7 @@ class GAN(object):
         if continueTrain == False:
             checkpointer = ModelCheckpoint(weightsNetGPath, monitor = 'val_loss', verbose = 1, save_best_only = True, save_weights_only = True, mode = 'min')
             print('begin to train G')
-            trainingHistoryG = self.netG.fit(x = extraTrain, y = memTrain, batch_size = self.batchSize*2, epochs = netGOnlyEpochs, verbose = 2,callbacks = [checkpointer],
+            trainingHistoryG = self.netG.fit(x = extraSequence, y = memSequence, batch_size = self.batchSize*2, epochs = netGOnlyEpochs, verbose = 2,callbacks = [checkpointer],
             validation_split = valSplit)
         elif continueTrain == True:
             preTrainedGPath = preTrainedGPath + 'netG_GOnly.h5'
@@ -329,40 +330,38 @@ class GAN(object):
         labelReal = np.ones((self.batchSize), dtype = np.float64)
         labelFake = -np.ones((self.batchSize), dtype = np.float64)
         dummyMem = np.zeros((self.batchSize), dtype = np.float64)
-        dataLength = len(extraTrain)
         earlyStoppingCounter = 0
         print('begin to train GAN')
         for currentEpoch in range(netGOnlyEpochs+1, epochsNum+1):
-            for currentBatch in range(0, dataLength, self.batchSize):
+            beginTime = datetime.datetime.now()
+            [extraTrain, extraVal, memTrain, memVal] = dataProc.splitTrainAndVal(extraSequence, memSequence, valSplit)
+            for currentBatch in range(0, trainingDataLength, self.batchSize):
                 extraLocal = extraTrain[currentBatch:currentBatch+self.batchSize, :]
                 memLocal = memTrain[currentBatch:currentBatch+self.batchSize, :]
-                randomIndex = np.random.randint(low = 0, high = dataLength-self.batchSize-1, size = trainingRatio, dtype = np.int32)
+                randomIndexes = np.random.randint(low = 0, high = trainingDataLength-self.batchSize-1, size = trainingRatio, dtype = np.int32)
                 for i in range(0, trainingRatio):
-                    extraForD = extraTrain[randomIndex[i]:randomIndex[i]+self.batchSize]
-                    memForD = memTrain[randomIndex[i]:randomIndex[i]+self.batchSize]
+                    extraForD = extraTrain[randomIndexes[i]:randomIndexes[i]+self.batchSize]
+                    memForD = memTrain[randomIndexes[i]:randomIndexes[i]+self.batchSize]
                     lossD = self.penalizedNetD.train_on_batch([extraForD, memForD], [labelReal, labelFake, dummyMem])
                 lossA = self.netA.train_on_batch(extraLocal, [memLocal, labelReal])
                 lossRecorder[lossCounter, 0] = lossD[0]
                 lossRecorder[lossCounter, 1] = lossA[0]
                 lossCounter += 1
-                lossDStr = 'lossD is ' + lossD[0].astype(np.str) + ' '
-                lossDOnRealStr = 'lossD on real is ' + lossD[1].astype(np.str) + ' '
-                lossDOnFakeStr = 'lossD on fake is ' + lossD[2].astype(np.str) + ' '
-                lossDOnPenalty = 'lossD on penalty is ' + lossD[3].astype(np.str) + ' '
-                lossAStr = 'lossA is ' + lossA[0].astype(np.str) + ' '
-                lossGStr = 'lossG is ' + lossA[1].astype(np.str) + ' '
-                lossDInA = 'lossD in A is ' + lossA[2].astype(np.str) + ' '
-                msg = 'epoch of ' + '%d '%(currentEpoch) + 'batch of ' + '%d '%(currentBatch/self.batchSize+1) + lossDStr + lossDOnRealStr + lossDOnFakeStr \
-                + lossDOnPenalty + lossAStr + lossGStr + lossDInA
-                print(msg)
             #validate the model
-            valSize = math.floor(dataLength*valSplit)
-            randomIndexVal = np.random.randint(low = 0, high = dataLength-valSize-1, size = 1, dtype = np.int32)
-            extraVal = extraTrain[randomIndexVal[0]:randomIndexVal[0]+valSize]
-            realMemVal = memTrain[randomIndexVal[0]:randomIndexVal[0]+valSize]
-            lossVal = self.netG.evaluate(x = extraVal, y = realMemVal, batch_size = self.batchSize, verbose = 0)
-            lossValStr = 'lossVal is ' + '%.6f'%lossVal[0]
-            print(lossValStr)
+            lossVal = self.netG.evaluate(x = extraVal, y = memVal, batch_size = self.batchSize, verbose = 0)
+            lossValStr = ' - lossVal: ' + '%.6f'%lossVal[0]
+            lossDStr = ' - lossD: ' + lossD[0].astype(np.str) + ' '
+            lossDOnRealStr = ' - lossD_real: ' + lossD[1].astype(np.str) + ' '
+            lossDOnFakeStr = ' - lossD_fake: ' + lossD[2].astype(np.str) + ' '
+            lossDOnPenalty = ' - penalty: ' + lossD[3].astype(np.str) + ' '
+            lossAStr = ' - lossA: ' + lossA[0].astype(np.str) + ' '
+            lossGStr = ' - lossG: ' + lossA[1].astype(np.str) + ' '
+            lossDInA = ' - lossD: ' + lossA[2].astype(np.str) + ' '
+            endTime = datetime.datetime.now()
+            trainingTime = endTime - beginTime
+            msg = ' - %d'%trainingTime.total_seconds() + 's' + ' - epoch: ' + '%d '%(currentEpoch) + lossDStr + lossDOnRealStr + lossDOnFakeStr \
+            + lossDOnPenalty + lossAStr + lossGStr + lossDInA + lossValStr
+            print(msg)
             if (minLossG > lossVal[0]):
                 weightsNetGPath = modelPath + 'netG_latest.h5'
                 self.netG.save_weights(weightsNetGPath, overwrite = True)
