@@ -15,8 +15,10 @@ from keras.models import *
 from keras.layers import Input, Concatenate, Conv2D, UpSampling2D, Dropout, BatchNormalization, Flatten, Dense, MaxPooling2D
 from keras.layers import Conv3D, UpSampling3D, MaxPooling3D, Reshape, Permute, Lambda, ZeroPadding3D
 from keras.optimizers import *
-from keras.callbacks import ModelCheckpoint, LearningRateScheduler
+from keras.callbacks import ModelCheckpoint, TensorBoard, EarlyStopping, LearningRateScheduler
+from keras import backend
 from keras.layers.advanced_activations import LeakyReLU
+from keras.utils import to_categorical
 import dataProc
 
 class networks(object):
@@ -321,6 +323,9 @@ class GAN(object):
         self.netG.compile(optimizer = Adam(lr = self.learningRateG), loss = self.lossFuncG, metrics = [self.lossFuncG])
         if continueTrain == False:
             checkpointer = ModelCheckpoint(weightsNetGPath, monitor = 'val_loss', verbose = 1, save_best_only = True, save_weights_only = True, mode = 'min')
+            tensorboardDir = modelPath + 'g_only_log'
+            recorder = TensorBoard(log_dir = tensorboardDir, write_graph = False)
+            earlyStopping = EarlyStopping(patience = 10, verbose = 1)
             print('begin to train G')
             trainingHistoryG = self.netG.fit(x = extraSequence, y = memSequence, batch_size = self.batchSize*2, epochs = netGOnlyEpochs, verbose = 2,callbacks = [checkpointer],
             validation_split = valSplit)

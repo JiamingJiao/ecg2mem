@@ -18,7 +18,7 @@ def npyToPng(srcPath, dstPath):
     print('completed')
 
 def loadData(srcPath, startNum = 0, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, imgCols = 256, normalization = 0, normalizationRange = [0., 1.],
-approximateData = False):
+approximateData = True):
     fileName = glob.glob(srcPath + '*.npy')
     lowerBound = normalizationRange[0]
     upperBound = normalizationRange[1]
