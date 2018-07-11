@@ -17,9 +17,9 @@ def npyToPng(srcPath, dstPath):
         cv.imwrite(dstPath + "%06d"%i+".png",npy[i, :, :])
     print('completed')
 
-def loadData(srcPath, startNum = 0, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, imgCols = 256, normalization = 0, normalizationRange = [0., 1.],
+def loadData(srcPath, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, imgCols = 256, normalization = 0, normalizationRange = [0., 1.],
 approximateData = True):
-    fileName = glob.glob(srcPath + '*.npy')
+    fileName = sorted(glob.glob(srcPath + '*.npy'))
     lowerBound = normalizationRange[0]
     upperBound = normalizationRange[1]
     if resize == 0:
@@ -28,14 +28,14 @@ approximateData = True):
         mergeImg = np.ndarray((len(fileName), imgRows, imgCols), dtype = np.float64)
         tempImg = np.ndarray((imgRows, imgCols), dtype = np.float64)
     rawImg = np.ndarray((rawRows, rawCols), dtype = np.float64)
-    for i in range(0, len(fileName)):
-        localName = srcPath + '%06d'%startNum + ".npy"
-        rawImg = np.load(localName)
+    index = 0
+    for i in fileName:
+        rawImg = np.load(i)
         if resize == 1:
-            mergeImg[i] = cv.resize(rawImg, (imgRows, imgCols))
+            mergeImg[index] = cv.resize(rawImg, (imgRows, imgCols))
         else:
-            mergeImg[i] = rawImg
-        startNum += 1
+            mergeImg[index] = rawImg
+        index += 1
     if approximateData == True:
         min = np.amin(mergeImg)
         max = np.amax(mergeImg)
