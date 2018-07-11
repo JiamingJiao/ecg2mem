@@ -6,6 +6,7 @@ import cv2 as cv
 import glob
 import shutil
 import math
+import random
 
 def npyToPng(srcPath, dstPath):
     npy = loadData(srcPath)
@@ -127,11 +128,8 @@ def loadImage(srcPath, startNum = 0, resize = 0, rawRows = 200, rawCols = 200, i
         localName = srcPath + '%06d'%startNum + ".png"
         rawImg = cv.imread(localName, -1)
         if resize == 1:
-            #tempImg = cv.resize(rawImg, (imgRows, imgCols))
-            #mergeImg[i] = img_to_array(tempImg)
             mergeImg[i] = cv.resize(rawImg, (imgRows, imgCols))
         else:
-            #mergeImg[i] = img_to_array(rawImg)
             mergeImg[i] = rawImg
         startNum += 1
     if normalization == 1:
@@ -159,3 +157,37 @@ def renameData(*srcPath,  dstPath, potentialName = 'phie'):
         for j in range(0, fileNum):
             shutil.copy(srcPath[i] + potentialName + '_%04d'%j + '.npy', dstPath + '%06d'%dstDataID + '.npy', follow_symlinks = False)
             dstDataID += 1
+
+def clipData(srcPath, dstPath, bounds = [0., 1.]):
+    src = loadData(srcPath)
+    dst = np.clip(src, bounds[0], bounds[1])
+    for i in range(0, src.shape[0]):
+        dstFileName = dstPath + '%06d'%i
+        np.save(dstFileName, dst[i])
+
+def splitTrainAndVal(src1, src2, valSplit):
+    srcLength = src1.shape[0]
+    dataType = src1.dtype
+    dimension1 = src1.ndim
+    dimension2 = src2.ndim
+    valNum = math.floor(valSplit*srcLength+0.1)
+    randomIndexes = random.sample(range(0, srcLength), valNum)
+    trainDataShape1 = np.ndarray((dimension1), dtype = np.uint8)
+    valDataShape1 = np.ndarray((dimension1), dtype = np.uint8)
+    trainDataShape1[0] = srcLength - valNum
+    valDataShape1[0] = valNum
+    trainDataShape1[1:dimension1] = src1.shape[1:dimension1]
+    valDataShape1[1:dimension1] = src1.shape[1:dimension1]
+    trainDataShape2 = np.ndarray((dimension2), dtype = np.uint8)
+    valDataShape2 = np.ndarray((dimension2), dtype = np.uint8)
+    trainDataShape2[0] = srcLength - valNum
+    valDataShape2[0] = valNum
+    trainDataShape2[1:dimension2] = src2.shape[1:dimension2]
+    valDataShape2[1:dimension2] = src2.shape[1:dimension2]
+    dst = [np.ndarray((trainDataShape1), dtype = dataType), np.ndarray((valDataShape1), dtype = dataType),
+    np.ndarray((trainDataShape2), dtype = dataType), np.ndarray((valDataShape2), dtype = dataType)]
+    dst[1] = np.take(src1, randomIndexes, 0)
+    dst[0] = np.delete(src1, randomIndexes, 0)
+    dst[3] = np.take(src2, randomIndexes, 0)
+    dst[2] = np.delete(src2, randomIndexes, 0)
+    return dst

@@ -7,7 +7,10 @@ import os
 import glob
 import keras
 import math
+import functools
+import datetime
 import tensorflow as tf
+import keras.backend as K
 from keras.models import *
 from keras.layers import Input, Concatenate, Conv2D, UpSampling2D, Dropout, BatchNormalization, Flatten, Dense, MaxPooling2D
 from keras.layers import Conv3D, UpSampling3D, MaxPooling3D, Reshape, Permute, Lambda, ZeroPadding3D
@@ -169,7 +172,6 @@ class networks(object):
         decoder10 = Conv3D(1, kernel_size = (self.temporalDepth, 1, 1), activation = self.activationG, padding = 'valid', kernel_initializer = 'he_normal')(decoder9)
         squeezed10 = Lambda(squeeze, output_shape = (self.imgRows, self.imgCols, self.channels))(decoder10)
         model = Model(input = inputs, output = squeezed10, name = 'uNet3D')
-        model.summary()
         return model
 
     def straight3(self):
@@ -192,7 +194,7 @@ class networks(object):
         dense5 = Dense(self.dKernels*16)(drop4)
         dense5 = LeakyReLU(alpha = 0.2)(dense5)
         drop5 = Dropout(0.5)(dense5)
-        probability = Dense(2, activation = 'softmax')(drop5)
+        probability = Dense(1, activation = 'linear')(drop5)
         model = Model(input = inputs, output = probability, name='straight3')
         return model
 
@@ -221,13 +223,13 @@ class networks(object):
         drop6 = Dropout(0.5)(dense6)
         dense7 = Dense(self.dKernels*64, activation = 'relu')(drop6)
         drop7 = Dropout(0.5)(dense7)
-        probability = Dense(2, activation = 'softmax')(drop7)
+        probability = Dense(1, activation = 'linear')(drop7)
         model = Model(input = inputs, output = probability, name='VGG16')
         return model
 
 class GAN(object):
     def __init__(self, imgRows = 256, imgCols = 256, rawRows = 200, rawCols = 200, channels = 1, netDName = None, netGName = None, temporalDepth = None, uNetconnections = 1,
-    activationG = 'sigmoid', lossFuncD = 'categorical_crossentropy', lossFuncG = 'mae', optimizerG = 'Adam', lossRatio = 100, learningRateG = 1e-4, learningRateD = 1e-4):
+    activationG = 'relu', lossFuncG = 'mae', gradientPenaltyWeight = 10, lossRatio = 100, learningRateG = 1e-4, learningRateD = 1e-4, batchSize = 5):
         self.imgRows = imgRows
         self.imgCols = imgCols
         self.rawRows = rawRows
@@ -240,59 +242,82 @@ class GAN(object):
         self.learningRateG = learningRateG
         self.learningRateD = learningRateD
         self.activationG = activationG
+        self.batchSize = batchSize
         self.network = networks(imgRows = self.imgRows, imgCols = self.imgCols, channels = self.channels, temporalDepth = self.temporalDepth, activationG = self.activationG)
         if self.netDName == 'straight3':
             self.netD = self.network.straight3()
-            self.netDA = self.network.straight3()
         elif self.netDName == 'VGG16':
             self.netD = self.network.vgg16()
-            self.netDA = self.network.vgg16()
-        self.netDA.trainable = False
+        #add gradient penalty on D
+        real = Input((self.imgRows, self.imgCols, self.channels))
         if self.netGName == 'uNet':
             self.netG = self.network.uNet(connections = uNetconnections)
+            self.netG.trainable = False
+            inputsGForGradient = Input((self.imgRows, self.imgCols, self.channels))
+            outputsGForGradient = self.netG(inputsGForGradient)
+            realPair = Concatenate(axis = -1)([inputsGForGradient, real])
+            fakePair = Concatenate(axis = -1)([inputsGForGradient, outputsGForGradient])
+        elif self.netGName == 'uNet3D':
+            self.netG = self.network.uNet3D()
+            inputsGForGradient = Input((self.temporalDepth, self.imgRows, self.imgCols, self.channels))
+            self.netG.trainable = False
+            inputsGForGradient = Input((self.temporalDepth, self.imgRows, self.imgCols, self.channels))
+            outputsGForGradient = self.netG(inputsGForGradient)
+        outputsDOnReal = self.netD(realPair)
+        outputsDOnFake = self.netD(fakePair)
+        averagedRealFake = Lambda(self.randomlyWeightedAverage, output_shape = (self.imgRows, self.imgCols, self.channels*2))([realPair, fakePair])
+        outputsDOnAverage = self.netD(averagedRealFake)
+        gradientPenaltyLoss = functools.partial(calculateGradientPenaltyLoss, samples = averagedRealFake, weight = gradientPenaltyWeight)
+        gradientPenaltyLoss.__name__ = 'gradientPenalty'
+        self.penalizedNetD = Model(inputs = [inputsGForGradient, real], outputs = [outputsDOnReal, outputsDOnFake, outputsDOnAverage])
+        wassersteinDistance.__name__ = 'wassertein'
+        self.penalizedNetD.compile(optimizer = RMSprop(lr = self.learningRateD), loss = [wassersteinDistance, wassersteinDistance, gradientPenaltyLoss])
+        print(self.penalizedNetD.metrics_names)
+        #build adversarial network
+        self.netG.trainable = True
+        self.netD.trainable = False
+        if self.netGName == 'uNet':
             inputsA = Input((self.imgRows, self.imgCols, self.channels))
-            outputG = self.netG(inputsA)
-            inputD = Concatenate(axis = -1)([inputsA, outputG])
+            outputsG = self.netG(inputsA)
+            inputsD = Concatenate(axis = -1)([inputsA, outputsG])
         elif self.netGName == 'uNet3D':
             self.netG = self.network.uNet3D()
             inputsA = Input((self.temporalDepth, self.imgRows, self.imgCols, self.channels))
-            outputG = self.netG(inputsA)
+            outputsG = self.netG(inputsA)
             middleLayerOfInputs = Lambda(slice, output_shape = (1, self.imgRows, self.imgCols, self.channels))(inputsA)
             middleLayerOfInputs = Lambda(squeeze, output_shape = (self.imgRows, self.imgCols, self.channels))(middleLayerOfInputs)
-            inputD = Concatenate(axis = -1)([middleLayerOfInputs, outputG])
-        outputD = self.netDA(inputD)
-        self.netA = Model(input = inputsA, output =[outputG, outputD], name = 'netA')
-        self.netA.summary()
-        if optimizerG == 'Adam':
-            self.netA.compile(optimizer = Adam(lr = self.learningRateG), loss = {self.netGName:lossFuncG, self.netDName:lossFuncD},
-            loss_weights = [lossRatio, 1], metrics = {self.netGName:lossFuncG, self.netDName:lossFuncD})
-        self.netD.compile(optimizer = Adam(lr = self.learningRateD), loss = lossFuncD, metrics = [lossFuncD])
+            inputsD = Concatenate(axis = -1)([middleLayerOfInputs, outputsG])
+        outputsD = self.netD(inputsD)
+        self.netA = Model(input = inputsA, output =[outputsG, outputsD], name = 'netA')
+        self.netA.compile(optimizer = RMSprop(lr = self.learningRateG), loss = [lossFuncG, wassersteinDistance], loss_weights = [lossRatio, 1])
         print(self.netA.metrics_names)
+        self.netG.summary()
         self.netD.summary()
-        self.netDA.summary()
+        self.penalizedNetD.summary()
+        self.netA.summary()
 
-    def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, batchSize = 10, valSplit = 0.2, savingInterval = 50, netGOnlyEpochs = 25, continueTrain = False,
-    preTrainedGPath = None, approximateData = False):
+    def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, valSplit = 0.2, savingInterval = 50, netGOnlyEpochs = 25, continueTrain = False,
+    preTrainedGPath = None, approximateData = True, trainingRatio = 5, earlyStoppingPatience = 10):
         if self.activationG == 'tanh':
             dataRange = [-1., 1.]
         else:
             dataRange = [0., 1.]
+        extraRaw = dataProc.loadData(srcPath = extraPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
         if self.netGName == 'uNet':
-            extraSequence = dataProc.loadData(srcPath = extraPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
-            extraSequence = extraSequence.reshape((extraSequence.shape[0], self.imgRows, self.imgCols, self.channels))
-            extraTrain = extraSequence
+            extraSequence = np.ndarray((extraRaw.shape[0], self.imgRows, self.imgCols, self.channels), dtype = np.float64)
+            extraSequence = extraRaw.reshape((extraRaw.shape[0], self.imgRows, self.imgCols, self.channels))
         elif self.netGName == 'uNet3D':
-            extraSequence = dataProc.loadData(srcPath = extraPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
-            extraTrain = dataProc.create3DData(extraSequence, temporalDepth = self.temporalDepth)
-            extraTrain = extraTrain.reshape((extraTrain.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels))
-            extraSequence = extraSequence.reshape((extraSequence.shape[0], self.imgRows, self.imgCols, self.channels))
-        memTrain = dataProc.loadData(srcPath = memPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
-        memTrain = memTrain.reshape((memTrain.shape[0], self.imgRows, self.imgCols, self.channels))
-        print(extraTrain.shape)
-        lossRecorder = np.ndarray((round(extraTrain.shape[0]/batchSize)*epochsNum, 2), dtype = np.float32)
+            extraSequence = np.ndarray((extraRaw.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels), dtype = np.float64)
+            extraRaw = dataProc.create3DData(extraRaw, temporalDepth = self.temporalDepth)
+            extraSequence = extraRaw.reshape((extraSequence.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels))
+        memRaw = dataProc.loadData(srcPath = memPath, startNum = 0, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
+        memSequence = np.ndarray((memRaw.shape[0], self.imgRows, self.imgCols, self.channels), dtype = np.float64)
+        memSequence = memRaw.reshape((memRaw.shape[0], self.imgRows, self.imgCols, self.channels))
+        trainingDataLength = math.floor((1-valSplit)*extraSequence.shape[0]+0.1)
+        lossRecorder = np.ndarray((math.floor(trainingDataLength/self.batchSize + 0.1)*epochsNum, 2), dtype = np.float64)
         lossCounter = 0
         minLossG = 10000.0
-        savingStamp =(0, 0)
+        savingStamp = 0
         weightsNetGPath = modelPath + 'netG_GOnly.h5'
         weightsNetAPath = modelPath + 'netA_latest.h5'
         self.netG.compile(optimizer = Adam(lr = self.learningRateG), loss = self.lossFuncG, metrics = [self.lossFuncG])
@@ -302,52 +327,65 @@ class GAN(object):
             recorder = TensorBoard(log_dir = tensorboardDir, write_graph = False)
             earlyStopping = EarlyStopping(patience = 10, verbose = 1)
             print('begin to train G')
-            trainingHistoryG = self.netG.fit(x = extraTrain, y = memTrain, batch_size = batchSize*2, epochs = netGOnlyEpochs, verbose = 2,callbacks = [checkpointer,recorder, earlyStopping],
+            trainingHistoryG = self.netG.fit(x = extraSequence, y = memSequence, batch_size = self.batchSize*2, epochs = netGOnlyEpochs, verbose = 2,callbacks = [checkpointer],
             validation_split = valSplit)
         elif continueTrain == True:
             preTrainedGPath = preTrainedGPath + 'netG_GOnly.h5'
             self.netG.load_weights(preTrainedGPath)
-        for currentEpoch in range(netGOnlyEpochs, epochsNum):
-            for currentBatch in range(0, len(extraTrain), batchSize):
-                if (currentEpoch == netGOnlyEpochs) and (currentBatch == 0):
-                    print('begin to train GAN')
-                extraLocal = extraTrain[currentBatch:currentBatch+batchSize, :]
-                memLocal = memTrain[currentBatch:currentBatch+batchSize, :]
-                memFake = self.netG.predict_on_batch(extraLocal)
-                realAndFake = np.concatenate((memLocal,memFake), axis = 0)
-                extraForD = np.concatenate((extraSequence[currentBatch:currentBatch+batchSize, :], extraSequence[currentBatch:currentBatch+batchSize, :]), axis = 0)
-                extraAndMem = np.concatenate((extraForD, realAndFake), axis = -1)
-                labelD = np.zeros((batchSize*2), dtype = np.int32)
-                labelD[0:batchSize] = 1
-                oneHotLabelD = to_categorical(labelD, 2)
-                lossD = self.netD.train_on_batch(extraAndMem, oneHotLabelD)
-                self.netDA.set_weights(self.netD.get_weights())
-                labelA = np.ones((batchSize), dtype = np.int32) #to fool the netD
-                oneHotLabelA = to_categorical(labelA, 2)
-                lossA = self.netA.train_on_batch(extraLocal, [memLocal, oneHotLabelA])
+        labelReal = np.ones((self.batchSize), dtype = np.float64)
+        labelFake = -np.ones((self.batchSize), dtype = np.float64)
+        dummyMem = np.zeros((self.batchSize), dtype = np.float64)
+        earlyStoppingCounter = 0
+        print('begin to train GAN')
+        for currentEpoch in range(netGOnlyEpochs+1, epochsNum+1):
+            beginTime = datetime.datetime.now()
+            [extraTrain, extraVal, memTrain, memVal] = dataProc.splitTrainAndVal(extraSequence, memSequence, valSplit)
+            for currentBatch in range(0, trainingDataLength, self.batchSize):
+                extraLocal = extraTrain[currentBatch:currentBatch+self.batchSize, :]
+                memLocal = memTrain[currentBatch:currentBatch+self.batchSize, :]
+                randomIndexes = np.random.randint(low = 0, high = trainingDataLength-self.batchSize-1, size = trainingRatio, dtype = np.int32)
+                for i in range(0, trainingRatio):
+                    extraForD = extraTrain[randomIndexes[i]:randomIndexes[i]+self.batchSize]
+                    memForD = memTrain[randomIndexes[i]:randomIndexes[i]+self.batchSize]
+                    lossD = self.penalizedNetD.train_on_batch([extraForD, memForD], [labelReal, labelFake, dummyMem])
+                lossA = self.netA.train_on_batch(extraLocal, [memLocal, labelReal])
                 lossRecorder[lossCounter, 0] = lossD[0]
                 lossRecorder[lossCounter, 1] = lossA[0]
                 lossCounter += 1
-                lossDStr = 'lossD is ' + lossD[0].astype(np.str) + ' '
-                AccDStr = 'AccD is ' + lossD[1].astype(np.str) + ' '
-                lossAStr = 'lossA is ' + lossA[0].astype(np.str) + ' '
-                lossGStr = 'lossG is ' + lossA[1].astype(np.str) + ' '
-                lossDAStr = 'lossDA is ' + lossA[2].astype(np.str) + ' '
-                AccGStr = 'AccG is ' + lossA[3].astype(np.str) + ' '
-                AccDAStr = 'AccDA is ' + lossA[4].astype(np.str)
-                msg = 'epoch of ' + '%d '%(currentEpoch+1) + 'batch of ' + '%d '%(currentBatch/batchSize+1) + lossDStr + AccDStr + lossAStr + lossGStr \
-                + lossDAStr + AccGStr + AccDAStr
-                print(msg)
-                if (minLossG > lossA[2]):
-                    weightsNetGPath = modelPath + 'netG_latest.h5'
-                    self.netG.save_weights(weightsNetGPath, overwrite = True)
-                    #netA.save_weights(weightsNetAPath, overwrite = True)
-                    minLossG = lossA[2]
-                    savingStamp = (currentEpoch+1, round(currentBatch/batchSize+1))
-            if (currentEpoch % savingInterval == (savingInterval-1)) and (currentEpoch != epochsNum-1):
-                os.rename(modelPath+'netG_latest.h5', modelPath+'netG_%d_epochs.h5'%savingStamp[0])
+            #validate the model
+            lossVal = self.netG.evaluate(x = extraVal, y = memVal, batch_size = self.batchSize, verbose = 0)
+            lossValStr = ' - lossVal: ' + '%.6f'%lossVal[0]
+            lossDStr = ' - lossD: ' + lossD[0].astype(np.str) + ' '
+            lossDOnRealStr = ' - lossD_real: ' + lossD[1].astype(np.str) + ' '
+            lossDOnFakeStr = ' - lossD_fake: ' + lossD[2].astype(np.str) + ' '
+            lossDOnPenalty = ' - penalty: ' + lossD[3].astype(np.str) + ' '
+            lossAStr = ' - lossA: ' + lossA[0].astype(np.str) + ' '
+            lossGStr = ' - lossG: ' + lossA[1].astype(np.str) + ' '
+            lossDInA = ' - lossD: ' + lossA[2].astype(np.str) + ' '
+            endTime = datetime.datetime.now()
+            trainingTime = endTime - beginTime
+            msg = ' - %d'%trainingTime.total_seconds() + 's' + ' - epoch: ' + '%d '%(currentEpoch) + lossDStr + lossDOnRealStr + lossDOnFakeStr \
+            + lossDOnPenalty + lossAStr + lossGStr + lossDInA + lossValStr
+            print(msg)
+            if (minLossG > lossVal[0]):
+                weightsNetGPath = modelPath + 'netG_latest.h5'
+                self.netG.save_weights(weightsNetGPath, overwrite = True)
+                minLossG = lossVal[0]
+                earlyStoppingCounter = 0
+                savingStamp = currentEpoch
+            if (currentEpoch % savingInterval == 0) and (currentEpoch != epochsNum):
+                os.rename(modelPath+'netG_latest.h5', modelPath+'netG_%d_epochs.h5'%savingStamp)
+            earlyStoppingCounter += 1
+            if earlyStoppingCounter == earlyStoppingPatience:
+                print('early stopping')
+                break
         np.save(modelPath + 'loss', lossRecorder)
         print('training completed')
+
+    def randomlyWeightedAverage(self, src):
+        weights = K.random_uniform((self.batchSize, 1, 1, 1), minval = 0., maxval = 1.)
+        dst = (weights*src[0]) + ((1-weights)*src[1])
+        return dst
 
 def squeeze(src):
     dst = tf.squeeze(src, [1])
@@ -357,6 +395,18 @@ def slice(src):
     srcShape = src.shape.as_list()
     middleLayer = math.floor(srcShape[1]/2.0)
     dst = tf.slice(src, [0, middleLayer, 0, 0, 0], [-1, 1, -1, -1, -1])
-    print(srcShape)
-    print(dst.shape)
     return dst
+
+def wassersteinDistance(src1, src2):
+    dst = K.mean(src1*src2)
+    return dst
+
+def calculateGradientPenaltyLoss(true, prediction, samples, weight):
+    gradients = K.gradients(prediction, samples)[0]
+    gradientsSqr = K.square(gradients)
+    gradientsSqrSum = K.sum(gradientsSqr, axis = np.arange(1, len(gradientsSqr.shape)))
+    gradientsL2Norm = K.sqrt(gradientsSqrSum)
+    penalty = weight*K.square(1-gradientsL2Norm)
+    print(penalty.shape)
+    averagePenalty = K.mean(penalty, axis = 0)
+    return averagePenalty
