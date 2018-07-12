@@ -269,7 +269,7 @@ class GAN(object):
         gradientPenaltyLoss.__name__ = 'gradientPenalty'
         self.penalizedNetD = Model(inputs = [inputsGForGradient, real], outputs = [outputsDOnReal, outputsDOnFake, outputsDOnAverage])
         wassersteinDistance.__name__ = 'wassertein'
-        self.penalizedNetD.compile(optimizer = RMSprop(lr = self.learningRateD), loss = [wassersteinDistance, wassersteinDistance, gradientPenaltyLoss])
+        self.penalizedNetD.compile(optimizer = Adam(lr = self.learningRateD), loss = [wassersteinDistance, wassersteinDistance, gradientPenaltyLoss])
         print(self.penalizedNetD.metrics_names)
         #build adversarial network
         self.netG.trainable = True
@@ -287,7 +287,7 @@ class GAN(object):
             inputsD = Concatenate(axis = -1)([middleLayerOfInputs, outputsG])
         outputsD = self.netD(inputsD)
         self.netA = Model(input = inputsA, output =[outputsG, outputsD], name = 'netA')
-        self.netA.compile(optimizer = RMSprop(lr = self.learningRateG), loss = [lossFuncG, wassersteinDistance], loss_weights = [lossRatio, 1])
+        self.netA.compile(optimizer = Adam(lr = self.learningRateG), loss = [lossFuncG, wassersteinDistance], loss_weights = [lossRatio, 1])
         print(self.netA.metrics_names)
         self.netG.summary()
         self.netD.summary()

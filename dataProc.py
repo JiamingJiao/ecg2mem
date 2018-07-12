@@ -32,7 +32,7 @@ approximateData = True):
     for i in fileName:
         rawImg = np.load(i)
         if resize == 1:
-            mergeImg[index] = cv.resize(rawImg, (imgRows, imgCols))
+            mergeImg[index] = cv.resize(rawImg, (imgRows, imgCols), mergeIndex[index], 0, 0, cv.INTER_NEAREST)
         else:
             mergeImg[index] = rawImg
         index += 1
@@ -72,19 +72,20 @@ def generatePseudoECG(srcPath, dstPath):
         np.save(dstFileName, pseudoECG)
     print('completed')
 
-def downSample(srcPath, dstPath, samplePoints = (5, 5), interpolationSize = (200, 200), interpolationMethod = cv.INTER_NEAREST):
+def downSample(srcPath, dstPath, samplePoints = (5, 5), interpolationSize = (200, 200)):
     src = loadData(srcPath)
     rowStride = math.floor(src.shape[1]/samplePoints[0])
     colStride = math.floor(src.shape[2]/samplePoints[1])
     multipleOfStride = ((samplePoints[0]-1)*rowStride+1, (samplePoints[1]-1)*colStride+1)
     temp = np.ndarray(multipleOfStride, dtype = np.float64) #Its size is a multiple of stride + 1
     sample = np.ndarray(samplePoints, dtype = np.float64)
+    interpolated = np.ndarray(interpolationSize, dtype = np.float64)
     for i in range(0, src.shape[0]):
         temp = cv.resize(src[i, :, :], multipleOfStride)
         for j in range(0, samplePoints[0]):
             for k in range(0, samplePoints[1]):
                 sample[j, k] = temp[j*rowStride, k*colStride]
-        interpolated = cv.resize(sample, interpolationSize, interpolated, 0, 0, interpolationMethod)
+        interpolated = cv.resize(sample, interpolationSize, interpolated, 0, 0, cv.INTER_NEAREST)
         dstFileName = dstPath + '%06d'%i
         np.save(dstFileName, interpolated)
     print('down sampling completed')
