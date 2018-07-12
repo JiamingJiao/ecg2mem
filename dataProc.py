@@ -72,7 +72,7 @@ def generatePseudoECG(srcPath, dstPath):
         np.save(dstFileName, pseudoECG)
     print('completed')
 
-def downSample(srcPath, dstPath, samplePoints = (5, 5), interpolationSize = (200, 200)):
+def downSample(srcPath, dstPath, samplePoints = (5, 5), interpolationSize = (200, 200), interpolationMethod = cv.INTER_NEAREST):
     src = loadData(srcPath)
     rowStride = math.floor(src.shape[1]/samplePoints[0])
     colStride = math.floor(src.shape[2]/samplePoints[1])
@@ -84,7 +84,7 @@ def downSample(srcPath, dstPath, samplePoints = (5, 5), interpolationSize = (200
         for j in range(0, samplePoints[0]):
             for k in range(0, samplePoints[1]):
                 sample[j, k] = temp[j*rowStride, k*colStride]
-        interpolated = cv.resize(sample, interpolationSize)
+        interpolated = cv.resize(sample, interpolationSize, interpolated, 0, 0, interpolationMethod)
         dstFileName = dstPath + '%06d'%i
         np.save(dstFileName, interpolated)
     print('down sampling completed')

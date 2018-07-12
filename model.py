@@ -294,7 +294,7 @@ class GAN(object):
         self.penalizedNetD.summary()
         self.netA.summary()
 
-    def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, valSplit = 0.2, continueTrain = False, preTrainedDPath = None, preTrainedDPath = None, approximateData = True, trainingRatio = 5, earlyStoppingPatience = 10):
+    def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, valSplit = 0.2, continueTrain = False, pretrainedGPath = None, pretrainedDPath = None, approximateData = True, trainingRatio = 5, earlyStoppingPatience = 10):
         if self.activationG == 'tanh':
             dataRange = [-1., 1.]
         else:
@@ -315,10 +315,10 @@ class GAN(object):
         lossCounter = 0
         minLossG = 10000.0
         savingStamp = 0
-        weightsNetAPath = modelPath + 'netA_latest.h5'
+        weightsDPath = modelPath + 'netD_latest.h5'
         if continueTrain == True:
-            self.netG.load_weights(preTrainedGPath)
-            self.netD.load_weights(preTrainedDPath)
+            self.netG.load_weights(pretrainedGPath)
+            self.netD.load_weights(pretrainedDPath)
         labelReal = np.ones((self.batchSize), dtype = np.float64)
         labelFake = -np.ones((self.batchSize), dtype = np.float64)
         dummyMem = np.zeros((self.batchSize), dtype = np.float64)
@@ -342,8 +342,9 @@ class GAN(object):
             #validate the model
             lossVal = self.netG.evaluate(x = extraVal, y = memVal, batch_size = self.batchSize, verbose = 0)
             if (minLossG > lossVal[0]):
-                weightsNetGPath = modelPath + 'netG_latest.h5'
-                self.netG.save_weights(weightsNetGPath, overwrite = True)
+                weightsGPath = modelPath + 'netG_latest.h5'
+                self.netG.save_weights(weightsGPath, overwrite = True)
+                self.netD.save_weights(weightsDPath, overwrite = True)
                 minLossG = lossVal[0]
                 earlyStoppingCounter = 0
                 savingStamp = currentEpoch
@@ -355,16 +356,25 @@ class GAN(object):
         np.save(modelPath + 'loss', lossRecorder)
         print('training completed')
 
-    def diminishElectrodes(electrodesNumList, memPath, modelPath, epochsNum = 100, valSplit = 0.2, continueTrain = False, preTrainedGPath = None, preTrainedDPath = None, approximateData = True, trainingRatio = 5,
+    def diminishElectrodes(extraPathList, memPath, modelPath, epochsNum = 100, valSplit = 0.2, continueTrain = False, pretrainedGPath = None, pretrainedDPath = None, approximateData = True, trainingRatio = 5,
     earlyStoppingPatience = 10):
-        steps = len(electrodesNumList)
+        steps = len(extraPathList)
         if continueTrain == True:
-            self.netG.load_weights(preTrainedGPath)
-            self.netD.load_weights(preTrainedDPath)
+            self.netG.load_weights(pretrainedGPath)
+            self.netD.load_weights(pretrainedDPath)
         for i in range(0, steps):
-            os.makedirs(modelPath + 'model_%04d_electrodes_%d/'%(i, electrodesNumList[i]))
-            currentPath = modelPath + 'model_%04d_electrodes_%d/'%(i, electrodesNumList[i])
-
+            os.makedirs(modelPath + 'model_%04d/'%i
+            currentModelPath = modelPath + 'model_%04d/'%i
+            if i == 0:
+                isFirstStep = True
+                previousGPath = None
+                previousDPath = None
+            else:
+                isFirstStep = False
+                previousGPath = modelPath + 'model_%04d/netG_latest.h5'%i-1
+                previousDPath = modelPath + 'model_%04d/netD_latest.h5'%i-1
+            self.trainGAN(extraPath = extraPathList[i], memPath = memPath, modelPath = currentModelPath, epochsNum = epochsNum, valSplit = valSplit, continueTrain = ~isFirstStep, pretrainedGPath = previousGPath,
+            pretrainedDPath = previousDPath, approximateData = approximateData, trainingRatio = trainingRatio, earlyStoppingPatience = earlyStoppingPatienceList[i])
 
     def randomlyWeightedAverage(self, src):
         weights = K.random_uniform((self.batchSize, 1, 1, 1), minval = 0., maxval = 1.)
