@@ -229,7 +229,7 @@ class networks(object):
 
 class GAN(object):
     def __init__(self, imgRows = 256, imgCols = 256, channels = 1, netDName = None, netGName = None, temporalDepth = None, uNetConnections = 1,
-    activationG = 'relu', lossFuncG = 'mae', gradientPenaltyWeight = 10, lossRatio = 100, learningRateG = 1e-4, learningRateD = 1e-4, beta1 = 0.5, beta2 = 0.9,
+    activationG = 'relu', lossFuncG = 'mae', gradientPenaltyWeight = 10, lossRatio = 100, learningRateG = 1e-4, learningRateD = 1e-4, beta1 = 0.9, beta2 = 0.999,
     batchSize = 10):
         self.imgRows = imgRows
         self.imgCols = imgCols
@@ -291,13 +291,13 @@ class GAN(object):
         self.netA = Model(input = inputsA, output =[outputsG, outputsD], name = 'netA')
         self.netA.compile(optimizer = Adam(lr = self.learningRateG, beta_1 = beta1, beta_2 = beta2), loss = [lossFuncG, wassersteinDistance], loss_weights = [lossRatio, 1])
         print(self.netA.metrics_names)
-        self.netG.compile(optimizer = Adam(), loss = self.lossFuncG, metrics = [self.lossFuncG])
+        self.netG.compile(optimizer = Adam(lr = self.learningRateG), loss = self.lossFuncG, metrics = [self.lossFuncG])
         self.netG.summary()
         self.netD.summary()
         self.penalizedNetD.summary()
         self.netA.summary()
 
-    def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, valSplit = 0.2, continueTrain = False, pretrainedGPath = None, pretrainedDPath = None,
+    def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, netGOnlyEpochs = 0, valSplit = 0.2, continueTrain = False, pretrainedGPath = None, pretrainedDPath = None,
     approximateData = True, trainingRatio = 5, earlyStoppingPatience = 10):
         if self.activationG == 'tanh':
             dataRange = [-1., 1.]
@@ -318,17 +318,19 @@ class GAN(object):
         lossRecorder = np.ndarray((math.floor(trainingDataLength/self.batchSize + 0.1)*epochsNum, 2), dtype = np.float64)
         lossCounter = 0
         minLossG = 10000.0
-        savingStamp = 0
         weightsDPath = modelPath + 'netD_latest.h5'
         if continueTrain == True:
             self.netG.load_weights(pretrainedGPath)
             self.netD.load_weights(pretrainedDPath)
+        if netGOnlyEpochs > 0:
+            print('begin to train netG')
+            self.netG.fit(x = extraSequence, y = memSequence, batch_size = self.batchSize, epochs = netGOnlyEpochs, verbose = 2, shuffle = True, validation_split = valSplit)
         labelReal = np.ones((self.batchSize), dtype = np.float64)
         labelFake = -np.ones((self.batchSize), dtype = np.float64)
         dummyMem = np.zeros((self.batchSize), dtype = np.float64)
         earlyStoppingCounter = 0
         print('begin to train GAN')
-        for currentEpoch in range(0, epochsNum):
+        for currentEpoch in range(netGOnlyEpochs, epochsNum):
             beginingTime = datetime.datetime.now()
             [extraTrain, extraVal, memTrain, memVal] = dataProc.splitTrainAndVal(extraSequence, memSequence, valSplit)
             for currentBatch in range(0, trainingDataLength, self.batchSize):
@@ -351,7 +353,6 @@ class GAN(object):
                 self.netD.save_weights(weightsDPath, overwrite = True)
                 minLossG = lossVal[0]
                 earlyStoppingCounter = 0
-                savingStamp = currentEpoch
             earlyStoppingCounter += 1
             displayLoss(lossD, lossA, lossVal, beginingTime, currentEpoch+1)
             if earlyStoppingCounter == earlyStoppingPatience:
