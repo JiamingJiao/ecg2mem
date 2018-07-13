@@ -229,7 +229,8 @@ class networks(object):
 
 class GAN(object):
     def __init__(self, imgRows = 256, imgCols = 256, channels = 1, netDName = None, netGName = None, temporalDepth = None, uNetConnections = 1,
-    activationG = 'relu', lossFuncG = 'mae', gradientPenaltyWeight = 10, lossRatio = 100, learningRateG = 1e-4, learningRateD = 1e-4, batchSize = 10):
+    activationG = 'relu', lossFuncG = 'mae', gradientPenaltyWeight = 10, lossRatio = 100, learningRateG = 1e-4, learningRateD = 1e-4, beta1 = 0.5, beta2 = 0.9,
+    batchSize = 10):
         self.imgRows = imgRows
         self.imgCols = imgCols
         self.channels = channels
@@ -269,7 +270,8 @@ class GAN(object):
         gradientPenaltyLoss.__name__ = 'gradientPenalty'
         self.penalizedNetD = Model(inputs = [inputsGForGradient, real], outputs = [outputsDOnReal, outputsDOnFake, outputsDOnAverage])
         wassersteinDistance.__name__ = 'wassertein'
-        self.penalizedNetD.compile(optimizer = Adam(lr = self.learningRateD), loss = [wassersteinDistance, wassersteinDistance, gradientPenaltyLoss])
+        self.penalizedNetD.compile(optimizer = Adam(lr = self.learningRateD, beta_1 = beta1, beta_2 = beta2), loss = [wassersteinDistance, wassersteinDistance,
+        gradientPenaltyLoss])
         print(self.penalizedNetD.metrics_names)
         #build adversarial network
         self.netG.trainable = True
@@ -287,14 +289,16 @@ class GAN(object):
             inputsD = Concatenate(axis = -1)([middleLayerOfInputs, outputsG])
         outputsD = self.netD(inputsD)
         self.netA = Model(input = inputsA, output =[outputsG, outputsD], name = 'netA')
-        self.netA.compile(optimizer = Adam(lr = self.learningRateG), loss = [lossFuncG, wassersteinDistance], loss_weights = [lossRatio, 1])
+        self.netA.compile(optimizer = Adam(lr = self.learningRateG, beta_1 = beta1, beta_2 = beta2), loss = [lossFuncG, wassersteinDistance], loss_weights = [lossRatio, 1])
         print(self.netA.metrics_names)
+        self.netG.compile(optimizer = Adam(), loss = self.lossFuncG, metrics = [self.lossFuncG])
         self.netG.summary()
         self.netD.summary()
         self.penalizedNetD.summary()
         self.netA.summary()
 
-    def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, valSplit = 0.2, continueTrain = False, pretrainedGPath = None, pretrainedDPath = None, approximateData = True, trainingRatio = 5, earlyStoppingPatience = 10):
+    def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, valSplit = 0.2, continueTrain = False, pretrainedGPath = None, pretrainedDPath = None,
+    approximateData = True, trainingRatio = 5, earlyStoppingPatience = 10):
         if self.activationG == 'tanh':
             dataRange = [-1., 1.]
         else:
@@ -324,7 +328,7 @@ class GAN(object):
         dummyMem = np.zeros((self.batchSize), dtype = np.float64)
         earlyStoppingCounter = 0
         print('begin to train GAN')
-        for currentEpoch in range(netGOnlyEpochs+1, epochsNum+1):
+        for currentEpoch in range(0, epochsNum):
             beginingTime = datetime.datetime.now()
             [extraTrain, extraVal, memTrain, memVal] = dataProc.splitTrainAndVal(extraSequence, memSequence, valSplit)
             for currentBatch in range(0, trainingDataLength, self.batchSize):
@@ -349,21 +353,21 @@ class GAN(object):
                 earlyStoppingCounter = 0
                 savingStamp = currentEpoch
             earlyStoppingCounter += 1
-            dislayLoss(lossD, lossA, lossVal, beginingTime)
+            displayLoss(lossD, lossA, lossVal, beginingTime, currentEpoch+1)
             if earlyStoppingCounter == earlyStoppingPatience:
                 print('early stopping')
                 break
         np.save(modelPath + 'loss', lossRecorder)
         print('training completed')
 
-    def diminishElectrodes(extraPathList, memPath, modelPath, epochsNum = 100, valSplit = 0.2, continueTrain = False, pretrainedGPath = None, pretrainedDPath = None, approximateData = True, trainingRatio = 5,
-    earlyStoppingPatience = 10):
+    def diminishElectrodes(extraPathList, memPath, modelPath, epochsNum = 100, valSplit = 0.2, continueTrain = False, pretrainedGPath = None, pretrainedDPath = None,
+    approximateData = True, trainingRatio = 5, earlyStoppingPatience = 10):
         steps = len(extraPathList)
         if continueTrain == True:
             self.netG.load_weights(pretrainedGPath)
             self.netD.load_weights(pretrainedDPath)
         for i in range(0, steps):
-            os.makedirs(modelPath + 'model_%04d/'%i
+            os.makedirs(modelPath + 'model_%04d/'%i)
             currentModelPath = modelPath + 'model_%04d/'%i
             if i == 0:
                 isFirstStep = True
@@ -373,8 +377,9 @@ class GAN(object):
                 isFirstStep = False
                 previousGPath = modelPath + 'model_%04d/netG_latest.h5'%i-1
                 previousDPath = modelPath + 'model_%04d/netD_latest.h5'%i-1
-            self.trainGAN(extraPath = extraPathList[i], memPath = memPath, modelPath = currentModelPath, epochsNum = epochsNum, valSplit = valSplit, continueTrain = ~isFirstStep, pretrainedGPath = previousGPath,
-            pretrainedDPath = previousDPath, approximateData = approximateData, trainingRatio = trainingRatio, earlyStoppingPatience = earlyStoppingPatienceList[i])
+            self.trainGAN(extraPath = extraPathList[i], memPath = memPath, modelPath = currentModelPath, epochsNum = epochsNum, valSplit = valSplit,
+            continueTrain = ~isFirstStep, pretrainedGPath = previousGPath, pretrainedDPath = previousDPath, approximateData = approximateData,
+            trainingRatio = trainingRatio, earlyStoppingPatience = earlyStoppingPatienceList[i])
 
     def randomlyWeightedAverage(self, src):
         weights = K.random_uniform((self.batchSize, 1, 1, 1), minval = 0., maxval = 1.)
@@ -405,7 +410,7 @@ def calculateGradientPenaltyLoss(true, prediction, samples, weight):
     averagePenalty = K.mean(penalty, axis = 0)
     return averagePenalty
 
-def displayLoss(lossD, lossA, lossVal, beginingTime):
+def displayLoss(lossD, lossA, lossVal, beginingTime, epoch):
     lossValStr = ' - lossVal: ' + '%.6f'%lossVal[0]
     lossDStr = ' - lossD: ' + lossD[0].astype(np.str) + ' '
     lossDOnRealStr = ' - lossD_real: ' + lossD[1].astype(np.str) + ' '
@@ -416,6 +421,6 @@ def displayLoss(lossD, lossA, lossVal, beginingTime):
     lossDInA = ' - lossD: ' + lossA[2].astype(np.str) + ' '
     endTime = datetime.datetime.now()
     trainingTime = endTime - beginingTime
-    msg = ' - %d'%trainingTime.total_seconds() + 's' + ' - epoch: ' + '%d '%(currentEpoch) + lossDStr + lossDOnRealStr + lossDOnFakeStr \
+    msg = ' - %d'%trainingTime.total_seconds() + 's' + ' - epoch: ' + '%d '%(epoch) + lossDStr + lossDOnRealStr + lossDOnFakeStr \
     + lossDOnPenalty + lossAStr + lossGStr + lossDInA + lossValStr
     print(msg)
