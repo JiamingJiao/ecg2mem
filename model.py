@@ -361,7 +361,7 @@ class GAN(object):
         np.save(modelPath + 'loss', lossRecorder)
         print('training completed')
 
-    def diminishElectrodes(extraPathList, memPath, modelPath, epochsNum = 100, valSplit = 0.2, continueTrain = False, pretrainedGPath = None, pretrainedDPath = None,
+    def diminishElectrodes(extraPathList, memPath, modelPath, epochsNum = 100, netGOnlyEpochs = 0, valSplit = 0.2, continueTrain = False, pretrainedGPath = None, pretrainedDPath = None,
     approximateData = True, trainingRatio = 5, earlyStoppingPatience = 10):
         steps = len(extraPathList)
         if continueTrain == True:
@@ -378,7 +378,7 @@ class GAN(object):
                 isFirstStep = False
                 previousGPath = modelPath + 'model_%04d/netG_latest.h5'%i-1
                 previousDPath = modelPath + 'model_%04d/netD_latest.h5'%i-1
-            self.trainGAN(extraPath = extraPathList[i], memPath = memPath, modelPath = currentModelPath, epochsNum = epochsNum, valSplit = valSplit,
+            self.trainGAN(extraPath = extraPathList[i], memPath = memPath, modelPath = currentModelPath, epochsNum = epochsNum, netGOnlyEpochs = netGOnlyEpochs, valSplit = valSplit,
             continueTrain = ~isFirstStep, pretrainedGPath = previousGPath, pretrainedDPath = previousDPath, approximateData = approximateData,
             trainingRatio = trainingRatio, earlyStoppingPatience = earlyStoppingPatienceList[i])
 

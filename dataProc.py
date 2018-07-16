@@ -48,7 +48,6 @@ approximateData = True):
         mergeImg = lowerBound + ((mergeImg-min)*(upperBound-lowerBound))/(max-min)
     return mergeImg
 
-# generate full size pseudo-ECG maps, and downsample them if it is necessary
 def generatePseudoECG(srcPath, dstPath):
     src = loadData(srcPath = srcPath, startNum = 0, resize = 0)
     dst = np.ndarray(src.shape, dtype = np.float64)
@@ -68,7 +67,7 @@ def generatePseudoECG(srcPath, dstPath):
             for col in range(0, src.shape[2]):
                 distance = cv.magnitude((rowIndex-row), (colIndex-col))
                 pseudoECG[row,col] = cv.sumElems(cv.divide(diffV, distance))[0]
-        dstFileName = dstPath + '%04d'%i
+        dstFileName = dstPath + '%06'%i
         np.save(dstFileName, pseudoECG)
     print('completed')
 
@@ -150,15 +149,6 @@ def create3DData(src, temporalDepth):
         dst[i, :, :, :] = src[i-paddingDepth:i+paddingDepth+1, :, :]
     return dst
 
-def renameData(*srcPath,  dstPath, potentialName = 'phie'):
-    dstDataID = 0
-    for i in range(0, len(srcPath)):
-        fileName = glob.glob(srcPath[i] + potentialName + '*.npy')
-        fileNum = len(fileName)
-        for j in range(0, fileNum):
-            shutil.copy(srcPath[i] + potentialName + '_%04d'%j + '.npy', dstPath + '%06d'%dstDataID + '.npy', follow_symlinks = False)
-            dstDataID += 1
-
 def clipData(srcPath, dstPath, bounds = [0., 1.]):
     src = loadData(srcPath)
     dst = np.clip(src, bounds[0], bounds[1])
@@ -192,3 +182,13 @@ def splitTrainAndVal(src1, src2, valSplit):
     dst[3] = np.take(src2, randomIndexes, 0)
     dst[2] = np.delete(src2, randomIndexes, 0)
     return dst
+
+def copyMassiveData(srcPathList, dstPath, potentialName):
+    i = 0
+    for srcPath in srcPathList:
+        fileName = sorted(glob.glob(srcPath + potentialName + '*.npy'))
+        for srcName in fileName:
+            dst = np.load(srcName)
+            dstFileName = dstPath + '%06d'%i
+            np.save(dstFileName, dst)
+            i += 1
