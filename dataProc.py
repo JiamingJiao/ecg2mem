@@ -32,7 +32,7 @@ approximateData = True):
     for i in fileName:
         rawImg = np.load(i)
         if resize == 1:
-            mergeImg[index] = cv.resize(rawImg, (imgRows, imgCols), mergeIndex[index], 0, 0, cv.INTER_NEAREST)
+            mergeImg[index] = cv.resize(rawImg, (imgRows, imgCols), mergeImg[index], 0, 0, cv.INTER_NEAREST)
         else:
             mergeImg[index] = rawImg
         index += 1
@@ -49,7 +49,7 @@ approximateData = True):
     return mergeImg
 
 def generatePseudoECG(srcPath, dstPath):
-    src = loadData(srcPath = srcPath, startNum = 0, resize = 0)
+    src = loadData(srcPath = srcPath, resize = 0)
     dst = np.ndarray(src.shape, dtype = np.float64)
     diffVKernel = np.zeros((3, 3, 1), dtype = np.float64)
     diffVKernel[1, :, 0] = 1
@@ -67,7 +67,7 @@ def generatePseudoECG(srcPath, dstPath):
             for col in range(0, src.shape[2]):
                 distance = cv.magnitude((rowIndex-row), (colIndex-col))
                 pseudoECG[row,col] = cv.sumElems(cv.divide(diffV, distance))[0]
-        dstFileName = dstPath + '%06'%i
+        dstFileName = dstPath + '%06d'%i
         np.save(dstFileName, pseudoECG)
     print('completed')
 
@@ -116,7 +116,7 @@ def generateSparsePseudoECG(srcPath, dstPath, samplePoints = (10, 10)):
         interpolated[i, :, :] = cv.resize(pseudoECG, (src.shape[1], src.shape[2]))
     return interpolated
 
-def loadImage(srcPath, startNum = 0, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, imgCols = 256, normalization = 0):
+def loadImage(srcPath, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, imgCols = 256, normalization = 0):
     fileName = glob.glob(srcPath + '*.png')
     if resize == 0:
         mergeImg = np.ndarray((len(fileName), rawRows, rawCols), dtype = np.float64)
@@ -125,13 +125,12 @@ def loadImage(srcPath, startNum = 0, resize = 0, rawRows = 200, rawCols = 200, i
         tempImg = np.ndarray((imgRows, imgCols), dtype = np.float64)
     rawImg = np.ndarray((rawRows, rawCols), dtype = np.float64)
     for i in range(0, len(fileName)):
-        localName = srcPath + '%06d'%startNum + ".png"
+        localName = srcPath + '%06d'%i + ".png"
         rawImg = cv.imread(localName, -1)
         if resize == 1:
             mergeImg[i] = cv.resize(rawImg, (imgRows, imgCols))
         else:
             mergeImg[i] = rawImg
-        startNum += 1
     if normalization == 1:
         min = np.amin(mergeImg)
         max = np.amax(mergeImg)

@@ -319,12 +319,17 @@ class GAN(object):
         lossCounter = 0
         minLossG = 10000.0
         weightsDPath = modelPath + 'netD_latest.h5'
+        weightsGPath = modelPath + 'netG_latest.h5'
         if continueTrain == True:
             self.netG.load_weights(pretrainedGPath)
             self.netD.load_weights(pretrainedDPath)
         if netGOnlyEpochs > 0:
+            self.netD.save_weights(weightsDPath, overwrite = True)
+            checkpointer = ModelCheckpoint(weightsGPath, monitor = 'val_loss', verbose = 1, save_best_only = True, save_weights_only = True, mode = 'min')
+            earlyStopping = EarlyStopping(patience = 10, verbose = 1)
             print('begin to train netG')
-            self.netG.fit(x = extraSequence, y = memSequence, batch_size = self.batchSize, epochs = netGOnlyEpochs, verbose = 2, shuffle = True, validation_split = valSplit)
+            self.netG.fit(x = extraSequence, y = memSequence, batch_size = self.batchSize, epochs = netGOnlyEpochs, verbose = 2, shuffle = True, validation_split = valSplit,
+            callbacks = [checkpointer, earlyStopping])
         labelReal = np.ones((self.batchSize), dtype = np.float64)
         labelFake = -np.ones((self.batchSize), dtype = np.float64)
         dummyMem = np.zeros((self.batchSize), dtype = np.float64)
@@ -347,8 +352,7 @@ class GAN(object):
                 lossCounter += 1
             #validate the model
             lossVal = self.netG.evaluate(x = extraVal, y = memVal, batch_size = self.batchSize, verbose = 0)
-            if (minLossG > lossVal[0]):
-                weightsGPath = modelPath + 'netG_latest.h5'
+            if (minLossG > lossVal[0]):                
                 self.netG.save_weights(weightsGPath, overwrite = True)
                 self.netD.save_weights(weightsDPath, overwrite = True)
                 minLossG = lossVal[0]
@@ -361,26 +365,27 @@ class GAN(object):
         np.save(modelPath + 'loss', lossRecorder)
         print('training completed')
 
-    def diminishElectrodes(extraPathList, memPath, modelPath, epochsNum = 100, netGOnlyEpochs = 0, valSplit = 0.2, continueTrain = False, pretrainedGPath = None, pretrainedDPath = None,
+    def diminishElectrodes(self, extraPathList, memPath, modelPath, epochsNum = 100, netGOnlyEpochs = 0, valSplit = 0.2, continueTrain = False, pretrainedGPath = None, pretrainedDPath = None,
     approximateData = True, trainingRatio = 5, earlyStoppingPatience = 10):
         steps = len(extraPathList)
         if continueTrain == True:
             self.netG.load_weights(pretrainedGPath)
             self.netD.load_weights(pretrainedDPath)
         for i in range(0, steps):
-            os.makedirs(modelPath + 'model_%04d/'%i)
             currentModelPath = modelPath + 'model_%04d/'%i
+            if not os.path.exists(currentModelPath):
+                os.makedirs(modelPath + 'model_%04d/'%i)
             if i == 0:
                 isFirstStep = True
                 previousGPath = None
                 previousDPath = None
             else:
                 isFirstStep = False
-                previousGPath = modelPath + 'model_%04d/netG_latest.h5'%i-1
-                previousDPath = modelPath + 'model_%04d/netD_latest.h5'%i-1
+                previousGPath = modelPath + 'model_%04d/netG_latest.h5'%(i-1)
+                previousDPath = modelPath + 'model_%04d/netD_latest.h5'%(i-1)
             self.trainGAN(extraPath = extraPathList[i], memPath = memPath, modelPath = currentModelPath, epochsNum = epochsNum, netGOnlyEpochs = netGOnlyEpochs, valSplit = valSplit,
-            continueTrain = ~isFirstStep, pretrainedGPath = previousGPath, pretrainedDPath = previousDPath, approximateData = approximateData,
-            trainingRatio = trainingRatio, earlyStoppingPatience = earlyStoppingPatienceList[i])
+            continueTrain = not isFirstStep, pretrainedGPath = previousGPath, pretrainedDPath = previousDPath, approximateData = approximateData,
+            trainingRatio = trainingRatio, earlyStoppingPatience = earlyStoppingPatience)
 
     def randomlyWeightedAverage(self, src):
         weights = K.random_uniform((self.batchSize, 1, 1, 1), minval = 0., maxval = 1.)
