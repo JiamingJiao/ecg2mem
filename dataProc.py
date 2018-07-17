@@ -182,12 +182,11 @@ def splitTrainAndVal(src1, src2, valSplit):
     dst[2] = np.delete(src2, randomIndexes, 0)
     return dst
 
-def copyMassiveData(srcPathList, dstPath, potentialName):
-    i = 0
+def copyMassiveData(srcPathList, dstPath, potentialName, startNum = 0):
     for srcPath in srcPathList:
         fileName = sorted(glob.glob(srcPath + potentialName + '*.npy'))
         for srcName in fileName:
             dst = np.load(srcName)
-            dstFileName = dstPath + '%06d'%i
+            dstFileName = dstPath + '%06d'%startNum
             np.save(dstFileName, dst)
-            i += 1
+            startNum += 1
