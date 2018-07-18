@@ -192,12 +192,14 @@ def copyMassiveData(srcPathList, dstPath, potentialName):
             np.save(dstFileName, dst)
             startNum += 1
 
-def copyData(srcPath, dstPath, startNum = 0, endNum = None):
+def copyData(srcPath, dstPath, startNum = 0, endNum = None, shiftNum = 0):
     fileName = sorted(glob.glob(srcPath + '*.npy'))
     del fileName[endNum+1:len(fileName)]
     del fileName[0:startNum]
     for srcName in fileName:
         dst = np.load(srcName)
-        dstFileName = dstPath + '%06d'%startNum
+        dstFileName = dstPath + '%06d'%(startNum+shiftNum)
         np.save(dstFileName, dst)
         startNum += 1
+
+def annealingDownSample(srcPath, dst, maskPath)

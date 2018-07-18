@@ -4,6 +4,7 @@
 import cv2 as cv
 import numpy as np
 import math
+import os
 import dataProc
 import model
 import keras.backend as K
@@ -57,12 +58,12 @@ class intermediateLayers(model.networks):
             self.network = super(intermediateLayers, self).uNet()
         self.network.load_weights(weightsPath)
         self.inputTensor = self.network.layers[0].input
-'''
-    def intermediateOutput(self, layerName):
+
+    def intermediateFeatures(self, layerName):
         layer = self.network.get_layer(layerName)
         layerFunc = K.function([self.inputTensor, K.learning_phase()], [layer.output])
         dst = layerFunc([self.input, 1])[0]
         return dst
 '''
-    class intermediateOutput()
-    def saveImg(self, src):
+    def allFeatures(self, dstPath):
+'''

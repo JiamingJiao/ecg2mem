@@ -374,7 +374,7 @@ class GAN(object):
         for i in range(0, steps):
             currentModelPath = modelPath + 'model_%04d/'%i
             if not os.path.exists(currentModelPath):
-                os.makedirs(modelPath + 'model_%04d/'%i)
+                os.makedirs(currentModelPath)
             if i == 0:
                 isFirstStep = True
                 previousGPath = None
