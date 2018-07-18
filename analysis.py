@@ -5,14 +5,8 @@ import cv2 as cv
 import numpy as np
 import math
 import dataProc
-
-'''
-def histogramMatchingArray(src1, src2):
-    return dst
-
-def calculateHistogram(src):
-    return dst
-'''
+import model
+import keras.backend as K
 
 def calculateMAE(src1, src2):
     difference = np.subtract(src1, src2)
@@ -51,3 +45,24 @@ def histSpecification(src, transArray):
         for j in range(0, src.shape[1]):
             dst[i, j] = transArray[src[i, j]]
     return dst
+
+class intermediateLayers(model.networks):
+    def __init__(self, src, netName = 'uNet', weightsPath = None, **kwargs):
+        super(intermediateLayers, self).__init__(**kwargs)
+        self.netName = netName
+        if self.netName == 'uNet':
+            resizedSrc = np.ndarray((self.imgRows, self.imgCols), dtype = np.float64)
+            resizedSrc = cv.resize(src, (self.imgRows, self.imgCols), resizedSrc, 0, 0, cv.INTER_NEAREST)
+            self.input = resizedSrc[np.newaxis, :, :, np.newaxis]
+            self.network = super(intermediateLayers, self).uNet()
+        self.network.load_weights(weightsPath)
+        self.inputTensor = self.network.layers[0].input
+'''
+    def intermediateOutput(self, layerName):
+        layer = self.network.get_layer(layerName)
+        layerFunc = K.function([self.inputTensor, K.learning_phase()], [layer.output])
+        dst = layerFunc([self.input, 1])[0]
+        return dst
+'''
+    class intermediateOutput()
+    def saveImg(self, src):
