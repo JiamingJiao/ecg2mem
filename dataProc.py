@@ -201,5 +201,3 @@ def copyData(srcPath, dstPath, startNum = 0, endNum = None, shiftNum = 0):
         dstFileName = dstPath + '%06d'%(startNum+shiftNum)
         np.save(dstFileName, dst)
         startNum += 1
-
-def annealingDownSample(srcPath, dst, maskPath)

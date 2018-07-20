@@ -228,7 +228,7 @@ class networks(object):
         return model
 
 class GAN(object):
-    def __init__(self, imgRows = 256, imgCols = 256, channels = 1, netDName = None, netGName = None, temporalDepth = None, uNetConnections = 1,
+    def __init__(self, imgRows = 256, imgCols = 256, channels = 1, gKernels = 64, dKernels = 64, netDName = None, netGName = None, temporalDepth = None, uNetConnections = 1,
     activationG = 'relu', lossFuncG = 'mae', gradientPenaltyWeight = 10, lossRatio = 100, learningRateG = 1e-4, learningRateD = 1e-4, beta1 = 0.9, beta2 = 0.999,
     batchSize = 10):
         self.imgRows = imgRows
@@ -242,7 +242,8 @@ class GAN(object):
         self.learningRateD = learningRateD
         self.activationG = activationG
         self.batchSize = batchSize
-        self.network = networks(imgRows = self.imgRows, imgCols = self.imgCols, channels = self.channels, temporalDepth = self.temporalDepth, activationG = self.activationG)
+        self.network = networks(imgRows = self.imgRows, imgCols = self.imgCols, channels = self.channels, gKernels = gKernels, dKernels = dKernels,
+        temporalDepth = self.temporalDepth,activationG = self.activationG)
         if self.netDName == 'straight3':
             self.netD = self.network.straight3()
         elif self.netDName == 'VGG16':
@@ -315,7 +316,7 @@ class GAN(object):
         memSequence = np.ndarray((memRaw.shape[0], self.imgRows, self.imgCols, self.channels), dtype = np.float64)
         memSequence = memRaw.reshape((memRaw.shape[0], self.imgRows, self.imgCols, self.channels))
         trainingDataLength = math.floor((1-valSplit)*extraSequence.shape[0]+0.1)
-        lossRecorder = np.ndarray((math.floor(trainingDataLength/self.batchSize + 0.1)*epochsNum, 2), dtype = np.float64)
+        lossRecorder = np.ndarray((epochsNum, 2), dtype = np.float64)
         lossCounter = 0
         minLossG = 10000.0
         weightsDPath = modelPath + 'netD_latest.h5'
@@ -328,14 +329,18 @@ class GAN(object):
             checkpointer = ModelCheckpoint(weightsGPath, monitor = 'val_loss', verbose = 1, save_best_only = True, save_weights_only = True, mode = 'min')
             earlyStopping = EarlyStopping(patience = 10, verbose = 1)
             print('begin to train netG')
-            self.netG.fit(x = extraSequence, y = memSequence, batch_size = self.batchSize, epochs = netGOnlyEpochs, verbose = 2, shuffle = True, validation_split = valSplit,
-            callbacks = [checkpointer, earlyStopping])
+            historyG = self.netG.fit(x = extraSequence, y = memSequence, batch_size = self.batchSize, epochs = netGOnlyEpochs, verbose = 2, shuffle = True,
+            validation_split = valSplit, callbacks = [checkpointer, earlyStopping])
+            realNetGOnlyEpochs = len(historyG.history['loss'])
+            lossCounter = realNetGOnlyEpochs
+            lossRecorder[0:lossCounter, 0] = historyG.history['loss']
+            lossRecorder[0:lossCounter, 1] = historyG.history['val_loss']
         labelReal = np.ones((self.batchSize), dtype = np.float64)
         labelFake = -np.ones((self.batchSize), dtype = np.float64)
         dummyMem = np.zeros((self.batchSize), dtype = np.float64)
         earlyStoppingCounter = 0
         print('begin to train GAN')
-        for currentEpoch in range(netGOnlyEpochs, epochsNum):
+        for currentEpoch in range(realNetGOnlyEpochs, epochsNum):
             beginingTime = datetime.datetime.now()
             [extraTrain, extraVal, memTrain, memVal] = dataProc.splitTrainAndVal(extraSequence, memSequence, valSplit)
             for currentBatch in range(0, trainingDataLength, self.batchSize):
@@ -347,11 +352,11 @@ class GAN(object):
                     memForD = memTrain[randomIndexes[i]:randomIndexes[i]+self.batchSize]
                     lossD = self.penalizedNetD.train_on_batch([extraForD, memForD], [labelReal, labelFake, dummyMem])
                 lossA = self.netA.train_on_batch(extraLocal, [memLocal, labelReal])
-                lossRecorder[lossCounter, 0] = lossD[0]
-                lossRecorder[lossCounter, 1] = lossA[0]
-                lossCounter += 1
             #validate the model
             lossVal = self.netG.evaluate(x = extraVal, y = memVal, batch_size = self.batchSize, verbose = 0)
+            lossRecorder[lossCounter, 0] = lossA[0]
+            lossRecorder[lossCounter, 1] = lossVal[0]
+            lossCounter += 1
             if (minLossG > lossVal[0]):                
                 self.netG.save_weights(weightsGPath, overwrite = True)
                 self.netD.save_weights(weightsDPath, overwrite = True)
