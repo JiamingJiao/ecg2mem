@@ -229,7 +229,7 @@ class networks(object):
 
 class GAN(object):
     def __init__(self, imgRows = 256, imgCols = 256, channels = 1, netDName = None, netGName = None, temporalDepth = None, uNetConnections = 1,
-    activationG = 'relu', lossFuncG = 'mae', gradientPenaltyWeight = 10, lossRatio = 100, learningRateG = 1e-4, learningRateD = 1e-4, beta1 = 0.9, beta2 = 0.999,
+    activationG = 'relu', lossFuncG = 'mae', gradientPenaltyWeight = 10, lossDWeight = 0.01, learningRateG = 1e-4, learningRateD = 1e-4, beta1 = 0.9, beta2 = 0.999,
     batchSize = 10):
         self.imgRows = imgRows
         self.imgCols = imgCols
@@ -289,7 +289,7 @@ class GAN(object):
             inputsD = Concatenate(axis = -1)([middleLayerOfInputs, outputsG])
         outputsD = self.netD(inputsD)
         self.netA = Model(input = inputsA, output =[outputsG, outputsD], name = 'netA')
-        self.netA.compile(optimizer = Adam(lr = self.learningRateG, beta_1 = beta1, beta_2 = beta2), loss = [lossFuncG, wassersteinDistance], loss_weights = [lossRatio, 1])
+        self.netA.compile(optimizer = Adam(lr = self.learningRateG, beta_1 = beta1, beta_2 = beta2), loss = [lossFuncG, wassersteinDistance], loss_weights = [1, lossDWeight])
         print(self.netA.metrics_names)
         self.netG.compile(optimizer = Adam(lr = self.learningRateG), loss = self.lossFuncG, metrics = [self.lossFuncG])
         self.netG.summary()
