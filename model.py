@@ -305,17 +305,17 @@ class GAN(object):
             dataRange = [0., 1.]
         extraRaw = dataProc.loadData(srcPath = extraPath, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
         if self.netGName == 'uNet':
-            extraSequence = np.ndarray((extraRaw.shape[0], self.imgRows, self.imgCols, self.channels), dtype = np.float64)
+            extraSequence = np.ndarray((extraRaw.shape[0], self.imgRows, self.imgCols, self.channels), dtype = np.float32)
             extraSequence = extraRaw.reshape((extraRaw.shape[0], self.imgRows, self.imgCols, self.channels))
         elif self.netGName == 'uNet3D':
-            extraSequence = np.ndarray((extraRaw.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels), dtype = np.float64)
+            extraSequence = np.ndarray((extraRaw.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels), dtype = np.float32)
             extraRaw = dataProc.create3DData(extraRaw, temporalDepth = self.temporalDepth)
             extraSequence = extraRaw.reshape((extraSequence.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels))
         memRaw = dataProc.loadData(srcPath = memPath, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
-        memSequence = np.ndarray((memRaw.shape[0], self.imgRows, self.imgCols, self.channels), dtype = np.float64)
+        memSequence = np.ndarray((memRaw.shape[0], self.imgRows, self.imgCols, self.channels), dtype = np.float32)
         memSequence = memRaw.reshape((memRaw.shape[0], self.imgRows, self.imgCols, self.channels))
         trainingDataLength = math.floor((1-valSplit)*extraSequence.shape[0]+0.1)
-        lossRecorder = np.ndarray((math.floor(trainingDataLength/self.batchSize + 0.1)*epochsNum, 2), dtype = np.float64)
+        lossRecorder = np.ndarray((math.floor(trainingDataLength/self.batchSize + 0.1)*epochsNum, 2), dtype = np.float32)
         lossCounter = 0
         minLossG = 10000.0
         weightsDPath = modelPath + 'netD_latest.h5'
@@ -330,9 +330,9 @@ class GAN(object):
             print('begin to train netG')
             self.netG.fit(x = extraSequence, y = memSequence, batch_size = self.batchSize, epochs = netGOnlyEpochs, verbose = 2, shuffle = True, validation_split = valSplit,
             callbacks = [checkpointer, earlyStopping])
-        labelReal = np.ones((self.batchSize), dtype = np.float64)
-        labelFake = -np.ones((self.batchSize), dtype = np.float64)
-        dummyMem = np.zeros((self.batchSize), dtype = np.float64)
+        labelReal = np.ones((self.batchSize), dtype = np.float32)
+        labelFake = -np.ones((self.batchSize), dtype = np.float32)
+        dummyMem = np.zeros((self.batchSize), dtype = np.float32)
         earlyStoppingCounter = 0
         print('begin to train GAN')
         for currentEpoch in range(netGOnlyEpochs, epochsNum):

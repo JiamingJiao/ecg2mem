@@ -52,7 +52,7 @@ class intermediateLayers(model.networks):
         super(intermediateLayers, self).__init__(**kwargs)
         self.netName = netName
         if self.netName == 'uNet':
-            resizedSrc = np.ndarray((self.imgRows, self.imgCols), dtype = np.float64)
+            resizedSrc = np.ndarray((self.imgRows, self.imgCols), dtype = np.float32)
             resizedSrc = cv.resize(src, (self.imgRows, self.imgCols), resizedSrc, 0, 0, cv.INTER_NEAREST)
             self.input = resizedSrc[np.newaxis, :, :, np.newaxis]
             self.network = super(intermediateLayers, self).uNet()
@@ -62,8 +62,13 @@ class intermediateLayers(model.networks):
     def intermediateFeatures(self, layerName):
         layer = self.network.get_layer(layerName)
         layerFunc = K.function([self.inputTensor, K.learning_phase()], [layer.output])
-        dst = layerFunc([self.input, 1])[0]
+        dst = layerFunc([self.input, 0])[0] # output in test mode, learning_phase = 0
         return dst
-'''
-    def allFeatures(self, dstPath):
-'''
+
+    # save all features of one layer in one picture
+    def saveFeatures(self, dstPath, layersNum = 8):
+        for encoderNum in range(1, layersNum+1, 1):
+            layerName = 'encoder' + '%d'%encoderNum
+            allFeatures = self.intermediateFeatures(layerName)
+            featuresNum = allFeatures.shape[0]
+
