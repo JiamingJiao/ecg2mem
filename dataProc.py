@@ -14,7 +14,7 @@ def npyToPng(srcPath, dstPath):
     max = np.amax(npy)
     npy = 255*(npy-min)/(max-min)
     for i in range(0, npy.shape[0]):
-        cv.imwrite(dstPath + "%06d"%i+".png",npy[i, :, :])
+        cv.imwrite(dstPath + "%06d"%i+".png", npy[i, :, :])
     print('completed')
 
 def loadData(srcPath, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, imgCols = 256, normalization = 0, normalizationRange = [0., 1.],

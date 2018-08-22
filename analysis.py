@@ -66,9 +66,24 @@ class intermediateLayers(model.networks):
         return dst
 
     # save all features of one layer in one picture
-    def saveFeatures(self, dstPath, layersNum = 8):
-        for encoderNum in range(1, layersNum+1, 1):
-            layerName = 'encoder' + '%d'%encoderNum
-            allFeatures = self.intermediateFeatures(layerName)
-            featuresNum = allFeatures.shape[0]
-
+    def saveFeatures(self, dstPath, startLayer = 3, endLayer = 7):
+        allFeatures = np.empty(endLayer-startKayer+1, dtype = object)
+        max = -np.inf
+        min = np.inf
+        #calculation
+        for encoderNum in range(startLayer, endLayer+1, 1):
+            layerName = 'connection' + '%d'%encoderNum
+            allFeatures[encoderNum-startLayer] = self.intermediateFeatures(layerName)
+            layerMax = np.amax(allFeatures[encoderNum-startLayer])
+            layerMin = np.amin(allFeatures[encoderNum-startLayer])
+            if layerMax > max:
+                max = layerMax
+            if layerMin < min:
+                min = layermin
+        #normalization and saving
+        for encoderNum in range(startLayer, endLayer+1, 1):
+            allFeatures[encoderNum-startLayer] = 255*(allFeatures[encoderNum-startLayer]-min)/(max-min)
+            layerPath = dstPath + 'layer_%d/'%encoderNum
+            featuresNum = allFeatures[encoderNum-startLayer].shape[3]
+            for feature in range(1, featuresNum+1, 1):
+                cv.imwrite(dstPath + "%d"%feature+".png", allFeatures[encoderNum-startLayer][0, :, :, feature])
