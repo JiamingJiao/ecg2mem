@@ -66,24 +66,39 @@ class intermediateLayers(model.networks):
         return dst
 
     # save all features of one layer in one picture
-    def saveFeatures(self, dstPath, startLayer = 3, endLayer = 7):
-        allFeatures = np.empty(endLayer-startKayer+1, dtype = object)
+    def saveFeatures(self, dstPath, encoderStartLayer = 1, encoderEndLayer = 5, decoderStartLayer = 3, decoderStartLayer = 8):
+        '''
+        encoderFeatures = np.empty(encoderEndLayer-encoderStartLayer+1, dtype = object)
+        decoderFeatures = np.empty(decoderEndLayer-decoderStartLayer+1, dtype = object)
         max = -np.inf
         min = np.inf
-        #calculation
-        for encoderNum in range(startLayer, endLayer+1, 1):
-            layerName = 'connection' + '%d'%encoderNum
-            allFeatures[encoderNum-startLayer] = self.intermediateFeatures(layerName)
-            layerMax = np.amax(allFeatures[encoderNum-startLayer])
-            layerMin = np.amin(allFeatures[encoderNum-startLayer])
+        #calculate encoder layers
+        for encoderNum in range(encoderStartLayer, encoderEndLayer+1, 1):
+            layerName = 'encoder' + '%d'%encoderNum
+            encoderFeatures[encoderNum-encoderStartLayer] = self.intermediateFeatures(layerName)
+            layerMax = np.amax(encoderFeatures[encoderNum-encoderStartLayer])
+            layerMin = np.amin(encoderFeatures[encoderNum-encoderStartLayer])
             if layerMax > max:
                 max = layerMax
             if layerMin < min:
-                min = layermin
+                min = layerMin
+        for decoderNum in range(decoderStartLayer, decoderEndLayer+1, 1):
+            layerName = 'decoder' + '%d'%decoderNum
+            decoderFeatures[decoderNum-decoderStartLayer] = self.intermediateFeatures(layerName)
+            layerMax = np.amax(decoderFeatures[decoderNum-decoderStartLayer])
+            layerMin = np.amin(decoderFeatures[decoderNum-decoderStartLayer])
+            if layerMax > max:
+                max = layerMax
+            if layerMin < min:
+                min = layerMin
+        '''
+
         #normalization and saving
         for encoderNum in range(startLayer, endLayer+1, 1):
-            allFeatures[encoderNum-startLayer] = 255*(allFeatures[encoderNum-startLayer]-min)/(max-min)
+            encoderFeatures[encoderNum-startLayer] = 255*(encoderFeatures[encoderNum-startLayer]-min)/(max-min)
             layerPath = dstPath + 'layer_%d/'%encoderNum
-            featuresNum = allFeatures[encoderNum-startLayer].shape[3]
-            for feature in range(1, featuresNum+1, 1):
-                cv.imwrite(dstPath + "%d"%feature+".png", allFeatures[encoderNum-startLayer][0, :, :, feature])
+            if not os.path.exists(layerPath):
+                os.makedirs(layerPath)
+            featuresNum = encoderFeatures[encoderNum-startLayer].shape[3]
+            for feature in range(0, featuresNum, 1):
+                cv.imwrite(layerPath + "%d"%(feature+1)+".png", encoderFeatures[encoderNum-startLayer][0, :, :, feature])
