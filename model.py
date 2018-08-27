@@ -99,7 +99,7 @@ class networks(object):
             decoder7 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False, name = 'decoder7')(decoder7)
             connection7 = Concatenate(axis = -1, name = 'connection7')([decoder7, encoder1])
             decoder8 = Conv2D(self.gKernels, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal', name = 'decoder8')(UpSampling2D(size = (2,2))(connection7))
-        decoder9 = Conv2D(1, 1, activation = self.activationG)(decoder8)
+        decoder9 = Conv2D(1, 1, activation = self.activationG, name = 'decoder9')(decoder8)
         model = Model(input = inputs, output = decoder9, name = 'uNet')
         return model
 

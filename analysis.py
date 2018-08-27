@@ -65,40 +65,43 @@ class intermediateLayers(model.networks):
         dst = layerFunc([self.input, 0])[0] # output in test mode, learning_phase = 0
         return dst
 
-    # save all features of one layer in one picture
-    def saveFeatures(self, dstPath, encoderStartLayer = 1, encoderEndLayer = 5, decoderStartLayer = 3, decoderStartLayer = 8):
-        '''
-        encoderFeatures = np.empty(encoderEndLayer-encoderStartLayer+1, dtype = object)
-        decoderFeatures = np.empty(decoderEndLayer-decoderStartLayer+1, dtype = object)
+    # save all features
+    def saveFeatures(self, dstPath, encoderStartLayer = 1, encoderEndLayer = 5, decoderStartLayer = 3, decoderEndLayer = 9, normalizationMode = 'layer'):
+        features = np.empty(encoderEndLayer-encoderStartLayer+1+decoderEndLayer-decoderStartLayer+1, dtype = object)
+        layersList = list()
+        for encoderNum in range(encoderStartLayer, encoderEndLayer+1, 1):
+            layersList.append('encoder' + '%d'%encoderNum)
+        for decoderNum in range(decoderStartLayer, decoderEndLayer+1, 1):
+            layersList.append('decoder' + '%d'%decoderNum)
+        # calculate intermediate layers
+        layerNum = 0
         max = -np.inf
         min = np.inf
-        #calculate encoder layers
-        for encoderNum in range(encoderStartLayer, encoderEndLayer+1, 1):
-            layerName = 'encoder' + '%d'%encoderNum
-            encoderFeatures[encoderNum-encoderStartLayer] = self.intermediateFeatures(layerName)
-            layerMax = np.amax(encoderFeatures[encoderNum-encoderStartLayer])
-            layerMin = np.amin(encoderFeatures[encoderNum-encoderStartLayer])
-            if layerMax > max:
-                max = layerMax
-            if layerMin < min:
-                min = layerMin
-        for decoderNum in range(decoderStartLayer, decoderEndLayer+1, 1):
-            layerName = 'decoder' + '%d'%decoderNum
-            decoderFeatures[decoderNum-decoderStartLayer] = self.intermediateFeatures(layerName)
-            layerMax = np.amax(decoderFeatures[decoderNum-decoderStartLayer])
-            layerMin = np.amin(decoderFeatures[decoderNum-decoderStartLayer])
-            if layerMax > max:
-                max = layerMax
-            if layerMin < min:
-                min = layerMin
-        '''
-
-        #normalization and saving
-        for encoderNum in range(startLayer, endLayer+1, 1):
-            encoderFeatures[encoderNum-startLayer] = 255*(encoderFeatures[encoderNum-startLayer]-min)/(max-min)
-            layerPath = dstPath + 'layer_%d/'%encoderNum
+        minMax = open(dstPath + 'min_max.txt', 'w+')
+        for layerName in layersList:
+            features[layerNum] = self.intermediateFeatures(layerName)
+            layerMax = np.amax(features[layerNum])
+            layerMin = np.amin(features[layerNum])
+            minMax.write('%s: %f, %f\n'%(layerName, layerMin, layerMax))
+            if normalizationMode == 'layer':
+                features[layerNum] = 255*(features[layerNum] - layerMin)/(layerMax - layerMin)
+            if normalizationMode == 'all':
+                if layerMax > max:
+                    max = layerMax
+                if layerMin < min:
+                    min = layerMin
+            layerNum += 1
+        minMax.close()
+        if normalizationMode == 'all':
+            features = 255*(features - min)/(max - min)
+        # save
+        layerNum = 0
+        for layerName in layersList:
+            #encoderFeatures[encoderNum-startLayer] = 255*(encoderFeatures[encoderNum-startLayer]-min)/(max-min)
+            layerPath = dstPath + layerName
             if not os.path.exists(layerPath):
                 os.makedirs(layerPath)
-            featuresNum = encoderFeatures[encoderNum-startLayer].shape[3]
+            featuresNum = features[layerNum].shape[3]
             for feature in range(0, featuresNum, 1):
-                cv.imwrite(layerPath + "%d"%(feature+1)+".png", encoderFeatures[encoderNum-startLayer][0, :, :, feature])
+                cv.imwrite(layerPath + "/%d"%(feature+1)+".png", features[layerNum][0, :, :, feature])
+            layerNum += 1
