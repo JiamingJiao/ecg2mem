@@ -52,7 +52,7 @@ class intermediateLayers(model.networks):
         super(intermediateLayers, self).__init__(**kwargs)
         self.netName = netName
         if self.netName == 'uNet':
-            resizedSrc = np.ndarray((self.imgRows, self.imgCols), dtype = np.float64)
+            resizedSrc = np.ndarray((self.imgRows, self.imgCols), dtype = np.float32)
             resizedSrc = cv.resize(src, (self.imgRows, self.imgCols), resizedSrc, 0, 0, cv.INTER_NEAREST)
             self.input = resizedSrc[np.newaxis, :, :, np.newaxis]
             self.network = super(intermediateLayers, self).uNet()
@@ -62,8 +62,46 @@ class intermediateLayers(model.networks):
     def intermediateFeatures(self, layerName):
         layer = self.network.get_layer(layerName)
         layerFunc = K.function([self.inputTensor, K.learning_phase()], [layer.output])
-        dst = layerFunc([self.input, 1])[0]
+        dst = layerFunc([self.input, 0])[0] # output in test mode, learning_phase = 0
         return dst
-'''
-    def allFeatures(self, dstPath):
-'''
+
+    # save all features
+    def saveFeatures(self, dstPath, encoderStartLayer = 1, encoderEndLayer = 5, decoderStartLayer = 3, decoderEndLayer = 9, normalizationMode = 'layer'):
+        features = np.empty(encoderEndLayer-encoderStartLayer+1+decoderEndLayer-decoderStartLayer+1, dtype = object)
+        layersList = list()
+        for encoderNum in range(encoderStartLayer, encoderEndLayer+1, 1):
+            layersList.append('encoder' + '%d'%encoderNum)
+        for decoderNum in range(decoderStartLayer, decoderEndLayer+1, 1):
+            layersList.append('decoder' + '%d'%decoderNum)
+        # calculate intermediate layers
+        layerNum = 0
+        max = -np.inf
+        min = np.inf
+        minMax = open(dstPath + 'min_max.txt', 'w+')
+        for layerName in layersList:
+            features[layerNum] = self.intermediateFeatures(layerName)
+            layerMax = np.amax(features[layerNum])
+            layerMin = np.amin(features[layerNum])
+            minMax.write('%s: %f, %f\n'%(layerName, layerMin, layerMax))
+            if normalizationMode == 'layer':
+                features[layerNum] = 255*(features[layerNum] - layerMin)/(layerMax - layerMin)
+            if normalizationMode == 'all':
+                if layerMax > max:
+                    max = layerMax
+                if layerMin < min:
+                    min = layerMin
+            layerNum += 1
+        minMax.close()
+        if normalizationMode == 'all':
+            features = 255*(features - min)/(max - min)
+        # save
+        layerNum = 0
+        for layerName in layersList:
+            #encoderFeatures[encoderNum-startLayer] = 255*(encoderFeatures[encoderNum-startLayer]-min)/(max-min)
+            layerPath = dstPath + layerName
+            if not os.path.exists(layerPath):
+                os.makedirs(layerPath)
+            featuresNum = features[layerNum].shape[3]
+            for feature in range(0, featuresNum, 1):
+                cv.imwrite(layerPath + "/%d"%(feature+1)+".png", features[layerNum][0, :, :, feature])
+            layerNum += 1

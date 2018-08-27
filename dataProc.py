@@ -14,7 +14,7 @@ def npyToPng(srcPath, dstPath):
     max = np.amax(npy)
     npy = 255*(npy-min)/(max-min)
     for i in range(0, npy.shape[0]):
-        cv.imwrite(dstPath + "%06d"%i+".png",npy[i, :, :])
+        cv.imwrite(dstPath + "%06d"%i+".png", npy[i, :, :])
     print('completed')
 
 def loadData(srcPath, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, imgCols = 256, normalization = 0, normalizationRange = [0., 1.],
@@ -23,11 +23,11 @@ approximateData = True):
     lowerBound = normalizationRange[0]
     upperBound = normalizationRange[1]
     if resize == 0:
-        mergeImg = np.ndarray((len(fileName), rawRows, rawCols), dtype = np.float64)
+        mergeImg = np.ndarray((len(fileName), rawRows, rawCols), dtype = np.float32)
     else:
-        mergeImg = np.ndarray((len(fileName), imgRows, imgCols), dtype = np.float64)
-        tempImg = np.ndarray((imgRows, imgCols), dtype = np.float64)
-    rawImg = np.ndarray((rawRows, rawCols), dtype = np.float64)
+        mergeImg = np.ndarray((len(fileName), imgRows, imgCols), dtype = np.float32)
+        tempImg = np.ndarray((imgRows, imgCols), dtype = np.float32)
+    rawImg = np.ndarray((rawRows, rawCols), dtype = np.float32)
     index = 0
     for i in fileName:
         rawImg = np.load(i)
@@ -119,11 +119,11 @@ def generateSparsePseudoECG(srcPath, dstPath, samplePoints = (10, 10)):
 def loadImage(srcPath, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, imgCols = 256, normalization = 0):
     fileName = glob.glob(srcPath + '*.png')
     if resize == 0:
-        mergeImg = np.ndarray((len(fileName), rawRows, rawCols), dtype = np.float64)
+        mergeImg = np.ndarray((len(fileName), rawRows, rawCols), dtype = np.float32)
     else:
-        mergeImg = np.ndarray((len(fileName), imgRows, imgCols), dtype = np.float64)
-        tempImg = np.ndarray((imgRows, imgCols), dtype = np.float64)
-    rawImg = np.ndarray((rawRows, rawCols), dtype = np.float64)
+        mergeImg = np.ndarray((len(fileName), imgRows, imgCols), dtype = np.float32)
+        tempImg = np.ndarray((imgRows, imgCols), dtype = np.float32)
+    rawImg = np.ndarray((rawRows, rawCols), dtype = np.float32)
     for i in range(0, len(fileName)):
         localName = srcPath + '%06d'%i + ".png"
         rawImg = cv.imread(localName, -1)
@@ -140,7 +140,7 @@ def loadImage(srcPath, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, 
 def create3DData(src, temporalDepth):
     framesNum = src.shape[0]
     paddingDepth = math.floor((temporalDepth-1)/2 + 0.1)
-    dst = np.zeros((framesNum, temporalDepth, src.shape[1], src.shape[2]), dtype = np.float64)
+    dst = np.zeros((framesNum, temporalDepth, src.shape[1], src.shape[2]), dtype = np.float32)
     for i in range(0, paddingDepth):
         dst[i, paddingDepth-i:temporalDepth, :, :] = src[0:temporalDepth-paddingDepth+i, :, :]
         dst[framesNum-1-i, 0:temporalDepth-paddingDepth+i, :, :] = src[framesNum-(temporalDepth-paddingDepth)-i:framesNum, :, :]
@@ -201,3 +201,7 @@ def copyData(srcPath, dstPath, startNum = 0, endNum = None, shiftNum = 0):
         dstFileName = dstPath + '%06d'%(startNum+shiftNum)
         np.save(dstFileName, dst)
         startNum += 1
+
+'''
+def annealingDownSample(srcPath, dst, maskPath)
+'''

@@ -77,29 +77,29 @@ class networks(object):
             decoder1 = Conv2D(self.gKernels*8, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(encoder8))
             decoder1 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(decoder1)
             decoder1 = Dropout(0.5, name = 'decoder1')(decoder1)
-            connection1 = Concatenate(axis = -1)([decoder1, encoder7])
+            connection1 = Concatenate(axis = -1, name = 'connection1')([decoder1, encoder7])
             decoder2 = Conv2D(self.gKernels*8, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(connection1))
             decoder2 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(decoder2)
             decoder2 = Dropout(0.5, name = 'decoder2')(decoder2)
-            connection2 = Concatenate(axis = -1)([decoder2, encoder6])
+            connection2 = Concatenate(axis = -1, name = 'connection2')([decoder2, encoder6])
             decoder3 = Conv2D(self.gKernels*8, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(connection2))
             decoder3 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False)(decoder3)
             decoder3 = Dropout(0.5, name = 'decoder3')(decoder3)
-            connection3 = Concatenate(axis = -1)([decoder3, encoder5])
+            connection3 = Concatenate(axis = -1, name = 'connection3')([decoder3, encoder5])
             decoder4 = Conv2D(self.gKernels*8, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(connection3))
             decoder4 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False, name = 'decoder4')(decoder4)
-            connection4 = Concatenate(axis = -1)([decoder4, encoder4])
+            connection4 = Concatenate(axis = -1, name = 'connection4')([decoder4, encoder4])
             decoder5 = Conv2D(self.gKernels*8, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(connection4))
             decoder5 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False, name = 'decoder5')(decoder5)
-            connection5 = Concatenate(axis = -1)([decoder5, encoder3])
+            connection5 = Concatenate(axis = -1, name = 'connection5')([decoder5, encoder3])
             decoder6 = Conv2D(self.gKernels*4, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(connection5))
             decoder6 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False, name = 'decoder6')(decoder6)
-            connection6 = Concatenate(axis = -1)([decoder6, encoder2])
+            connection6 = Concatenate(axis = -1, name = 'connection6')([decoder6, encoder2])
             decoder7 = Conv2D(self.gKernels*2, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(connection6))
             decoder7 = BatchNormalization(axis = -1, momentum = 0.99, epsilon = 0.0001, center = False, scale = False, name = 'decoder7')(decoder7)
-            connection7 = Concatenate(axis = -1)([decoder7, encoder1])
+            connection7 = Concatenate(axis = -1, name = 'connection7')([decoder7, encoder1])
             decoder8 = Conv2D(self.gKernels, 4, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal', name = 'decoder8')(UpSampling2D(size = (2,2))(connection7))
-        decoder9 = Conv2D(1, 1, activation = self.activationG)(decoder8)
+        decoder9 = Conv2D(1, 1, activation = self.activationG, name = 'decoder9')(decoder8)
         model = Model(input = inputs, output = decoder9, name = 'uNet')
         return model
 
@@ -228,8 +228,8 @@ class networks(object):
         return model
 
 class GAN(object):
-    def __init__(self, imgRows = 256, imgCols = 256, channels = 1, gKernels = 64, dKernels = 64, netDName = None, netGName = None, temporalDepth = None, uNetConnections = 1,
-    activationG = 'relu', lossFuncG = 'mae', gradientPenaltyWeight = 10, lossRatio = 100, learningRateG = 1e-4, learningRateD = 1e-4, beta1 = 0.9, beta2 = 0.999,
+    def __init__(self, imgRows = 256, imgCols = 256, channels = 1, netDName = None, netGName = None, temporalDepth = None, uNetConnections = 1,
+    activationG = 'relu', lossFuncG = 'mae', gradientPenaltyWeight = 10, lossDWeight = 0.01, learningRateG = 1e-4, learningRateD = 1e-4, beta1 = 0.9, beta2 = 0.999,
     batchSize = 10):
         self.imgRows = imgRows
         self.imgCols = imgCols
@@ -290,7 +290,7 @@ class GAN(object):
             inputsD = Concatenate(axis = -1)([middleLayerOfInputs, outputsG])
         outputsD = self.netD(inputsD)
         self.netA = Model(input = inputsA, output =[outputsG, outputsD], name = 'netA')
-        self.netA.compile(optimizer = Adam(lr = self.learningRateG, beta_1 = beta1, beta_2 = beta2), loss = [lossFuncG, wassersteinDistance], loss_weights = [lossRatio, 1])
+        self.netA.compile(optimizer = Adam(lr = self.learningRateG, beta_1 = beta1, beta_2 = beta2), loss = [lossFuncG, wassersteinDistance], loss_weights = [1, lossDWeight])
         print(self.netA.metrics_names)
         self.netG.compile(optimizer = Adam(lr = self.learningRateG), loss = self.lossFuncG, metrics = [self.lossFuncG])
         self.netG.summary()
@@ -306,17 +306,17 @@ class GAN(object):
             dataRange = [0., 1.]
         extraRaw = dataProc.loadData(srcPath = extraPath, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
         if self.netGName == 'uNet':
-            extraSequence = np.ndarray((extraRaw.shape[0], self.imgRows, self.imgCols, self.channels), dtype = np.float64)
+            extraSequence = np.ndarray((extraRaw.shape[0], self.imgRows, self.imgCols, self.channels), dtype = np.float32)
             extraSequence = extraRaw.reshape((extraRaw.shape[0], self.imgRows, self.imgCols, self.channels))
         elif self.netGName == 'uNet3D':
-            extraSequence = np.ndarray((extraRaw.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels), dtype = np.float64)
+            extraSequence = np.ndarray((extraRaw.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels), dtype = np.float32)
             extraRaw = dataProc.create3DData(extraRaw, temporalDepth = self.temporalDepth)
             extraSequence = extraRaw.reshape((extraSequence.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels))
         memRaw = dataProc.loadData(srcPath = memPath, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
-        memSequence = np.ndarray((memRaw.shape[0], self.imgRows, self.imgCols, self.channels), dtype = np.float64)
+        memSequence = np.ndarray((memRaw.shape[0], self.imgRows, self.imgCols, self.channels), dtype = np.float32)
         memSequence = memRaw.reshape((memRaw.shape[0], self.imgRows, self.imgCols, self.channels))
         trainingDataLength = math.floor((1-valSplit)*extraSequence.shape[0]+0.1)
-        lossRecorder = np.ndarray((epochsNum, 2), dtype = np.float64)
+        lossRecorder = np.ndarray((math.floor(trainingDataLength/self.batchSize + 0.1)*epochsNum, 2), dtype = np.float32)
         lossCounter = 0
         minLossG = 10000.0
         weightsDPath = modelPath + 'netD_latest.h5'
@@ -335,9 +335,9 @@ class GAN(object):
             lossCounter = realNetGOnlyEpochs
             lossRecorder[0:lossCounter, 0] = historyG.history['loss']
             lossRecorder[0:lossCounter, 1] = historyG.history['val_loss']
-        labelReal = np.ones((self.batchSize), dtype = np.float64)
-        labelFake = -np.ones((self.batchSize), dtype = np.float64)
-        dummyMem = np.zeros((self.batchSize), dtype = np.float64)
+        labelReal = np.ones((self.batchSize), dtype = np.float32)
+        labelFake = -np.ones((self.batchSize), dtype = np.float32)
+        dummyMem = np.zeros((self.batchSize), dtype = np.float32)
         earlyStoppingCounter = 0
         print('begin to train GAN')
         for currentEpoch in range(realNetGOnlyEpochs, epochsNum):
