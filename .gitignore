@@ -103,3 +103,4 @@ ENV/
 script.py
 to_do_list.txt
 *.ipynb
+reedbush/

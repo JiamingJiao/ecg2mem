@@ -379,6 +379,37 @@ class GAN(object):
         dst = (weights*src[0]) + ((1-weights)*src[1])
         return dst
 
+
+def trainG(ecgPath, memPath, modelPath, imgRows = 256, imgCols = 256, channels = 1, netGName = 'uNet', activationG = 'relu', temporalDepth = None, gKernels = 64, gKernelSize = 4,
+epochsNum = 100, lossFuncG = 'mae', batchSize = 10, learningRateG = 1e-4, earlyStoppingPatience = 10, valSplit = 0.2, approximateData = True):
+    network = networks(imgRows = imgRows, imgCols = imgCols, channels = channels, gKernels = gKernels, gKernelSize = gKernelSize, temporalDepth = temporalDepth,
+    activationG = activationG)
+    if activationG == 'tanh':
+        dataRange = [-1., 1.]
+    else:
+        dataRange = [0., 1.]
+    extraRaw = dataProc.loadData(srcPath = ecgPath, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
+    if netGName == 'uNet':
+        netG = network.uNet()
+        extraSequence = np.ndarray((extraRaw.shape[0], imgRows, imgCols, channels), dtype = np.float32)
+        extraSequence = extraRaw.reshape((extraRaw.shape[0], imgRows, imgCols, channels))
+    elif netGName == 'uNet3D':
+        netG = network.uNet3D()
+        extraSequence = np.ndarray((extraRaw.shape[0], temporalDepth, imgRows, imgCols, channels), dtype = np.float32)
+        extraRaw = dataProc.create3DData(extraRaw, temporalDepth = temporalDepth)
+        extraSequence = extraRaw.reshape((extraSequence.shape[0], temporalDepth, imgRows, imgCols, channels))
+    memRaw = dataProc.loadData(srcPath = memPath, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
+    memSequence = np.ndarray((memRaw.shape[0], imgRows, imgCols, channels), dtype = np.float32)
+    memSequence = memRaw.reshape((memRaw.shape[0], imgRows, imgCols, channels))
+    trainingDataLength = math.floor((1-valSplit)*extraSequence.shape[0]+0.1)
+    netG.compile(optimizer = Adam(lr = learningRateG), loss = lossFuncG, metrics = [lossFuncG])
+    netG.summary()
+    checkpointer = ModelCheckpoint(modelPath+'netG_latest.h5', monitor = 'val_loss', verbose = 1, save_best_only = True, save_weights_only = True, mode = 'min')
+    earlyStopping = EarlyStopping(patience = earlyStoppingPatience, verbose = 1)
+    print('begin to train netG')
+    historyG = netG.fit(x = extraSequence, y = memSequence, batch_size = batchSize, epochs = epochsNum, verbose = 2, shuffle = True, validation_split = valSplit,
+    callbacks = [checkpointer, earlyStopping])
+
 def squeeze(src):
     dst = tf.squeeze(src, [1])
     return dst
