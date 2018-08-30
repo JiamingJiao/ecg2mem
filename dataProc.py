@@ -23,11 +23,11 @@ approximateData = True):
     lowerBound = normalizationRange[0]
     upperBound = normalizationRange[1]
     if resize == 0:
-        mergeImg = np.ndarray((len(fileName), rawRows, rawCols), dtype = np.float32)
+        mergeImg = np.ndarray((len(fileName), rawRows, rawCols), dtype = np.float64)
     else:
-        mergeImg = np.ndarray((len(fileName), imgRows, imgCols), dtype = np.float32)
-        tempImg = np.ndarray((imgRows, imgCols), dtype = np.float32)
-    rawImg = np.ndarray((rawRows, rawCols), dtype = np.float32)
+        mergeImg = np.ndarray((len(fileName), imgRows, imgCols), dtype = np.float64)
+        tempImg = np.ndarray((imgRows, imgCols), dtype = np.float64)
+    rawImg = np.ndarray((rawRows, rawCols), dtype = np.float64)
     index = 0
     for i in fileName:
         rawImg = np.load(i)
@@ -49,7 +49,7 @@ approximateData = True):
     return mergeImg
 
 def generatePseudoECG(srcPath, dstPath):
-    src = loadData(srcPath = srcPath, resize = 0)
+    src = loadData(srcPath = srcPath)
     dst = np.ndarray(src.shape, dtype = np.float64)
     diffVKernel = np.zeros((3, 3, 1), dtype = np.float64)
     diffVKernel[1, :, 0] = 1
@@ -72,7 +72,7 @@ def generatePseudoECG(srcPath, dstPath):
     print('completed')
 
 def downSample(srcPath, dstPath, samplePoints = (5, 5), interpolationSize = (200, 200)):
-    src = loadData(srcPath)
+    src = loadData(srcPath, approximateData = False)
     rowStride = math.floor(src.shape[1]/samplePoints[0])
     colStride = math.floor(src.shape[2]/samplePoints[1])
     multipleOfStride = ((samplePoints[0]-1)*rowStride+1, (samplePoints[1]-1)*colStride+1)
@@ -94,36 +94,38 @@ def generateSparsePseudoECG(srcPath, dstPath, samplePoints = (10, 10)):
     rowStride = math.floor(src.shape[1]/samplePoints[0])
     colStride = math.floor(src.shape[2]/samplePoints[1])
     multipleOfStride = ((samplePoints[0]-1)*rowStride+1, (samplePoints[1]-1)*colStride+1)
-    temp = np.ndarray(multipleOfStride, dtype = np.float64) #Its size is a multiple of stride + 1
+    temp = np.ndarray(multipleOfStride, dtype = np.float64) #Its size is a multiple of stride
     sample = np.ndarray(samplePoints, dtype = np.float64)
     diffVKernel = np.zeros((3, 3, 1), dtype = np.float64)
     diffVKernel[1, :, 0] = 1
     diffVKernel[:, 1, 0] = 1
     diffVKernel[1, 1, 0] = -4
-    diffV = np.ndarray((src.shape[1], src.shape[2]), dtype = np.float64)
-    firstRowIndex = np.linspace(0, src.shape[1], num = src.shape[1], endpoint = False)
-    firstColIndex = np.linspace(0, src.shape[2], num = src.shape[2], endpoint = False)
+    diffV = np.ndarray(multipleOfStride, dtype = np.float64)
+    firstRowIndex = np.linspace(0, temp.shape[0], num = temp.shape[1], endpoint = False)
+    firstColIndex = np.linspace(0, temp.shape[0], num = temp.shape[1], endpoint = False)
     colIndex, rowIndex = np.meshgrid(firstRowIndex, firstColIndex)
+    distance = np.ndarray(multipleOfStride, dtype = np.float64)
     pseudoECG = np.ndarray(samplePoints, dtype = np.float64)
-    interpolated = np.ndarray(src.shape, dtype = np.float64)
+    interpolated = np.ndarray((src.shape[1], src.shape[2]), dtype = np.float64)
     for i in range(0, src.shape[0]):
-        diffV = cv.filter2D(src = src[i], ddepth = -1, kernel = diffVKernel, dst = diffV, anchor = (-1, -1), delta = 0, borderType = cv.BORDER_REPLICATE)
-        temp = cv.resize(src[i, :, :], multipleOfStride)
-        for row in range(0, temp.shape[0]):
-            for col in range(0, temp.shape[1]):
-                distance = cv.magnitude((rowIndex-row*stride), (colIndex-col*stride))
+        #diffV = cv.filter2D(src = src[i], ddepth = -1, kernel = diffVKernel, dst = diffV, anchor = (-1, -1), delta = 0, borderType = cv.BORDER_REPLICATE)
+        temp = cv.resize(src[i, :, :], multipleOfStride, temp, 0, 0, cv.INTER_CUBIC)
+        diffV = cv.filter2D(src = temp, ddepth = -1, kernel = diffVKernel, dst = diffV, anchor = (-1, -1), delta = 0, borderType = cv.BORDER_REPLICATE)
+        for row in range(0, samplePoints[0]):
+            for col in range(0, samplePoints[1]):
+                distance = cv.magnitude((rowIndex-row*rowStride), (colIndex-col*colStride))
                 pseudoECG[row, col] = cv.sumElems(cv.divide(diffV, distance))[0]
-        interpolated[i, :, :] = cv.resize(pseudoECG, (src.shape[1], src.shape[2]))
-    return interpolated
+        interpolated = cv.resize(pseudoECG, (src.shape[1], src.shape[2]), interpolated, 0, 0, cv.INTER_NEAREST)
+        np.save(dstPath + '%06d'%i, interpolated)
 
 def loadImage(srcPath, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, imgCols = 256, normalization = 0):
     fileName = glob.glob(srcPath + '*.png')
     if resize == 0:
-        mergeImg = np.ndarray((len(fileName), rawRows, rawCols), dtype = np.float32)
+        mergeImg = np.ndarray((len(fileName), rawRows, rawCols), dtype = np.float64)
     else:
-        mergeImg = np.ndarray((len(fileName), imgRows, imgCols), dtype = np.float32)
-        tempImg = np.ndarray((imgRows, imgCols), dtype = np.float32)
-    rawImg = np.ndarray((rawRows, rawCols), dtype = np.float32)
+        mergeImg = np.ndarray((len(fileName), imgRows, imgCols), dtype = np.float64)
+        tempImg = np.ndarray((imgRows, imgCols), dtype = np.float64)
+    rawImg = np.ndarray((rawRows, rawCols), dtype = np.float64)
     for i in range(0, len(fileName)):
         localName = srcPath + '%06d'%i + ".png"
         rawImg = cv.imread(localName, -1)
@@ -140,7 +142,7 @@ def loadImage(srcPath, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, 
 def create3DData(src, temporalDepth):
     framesNum = src.shape[0]
     paddingDepth = math.floor((temporalDepth-1)/2 + 0.1)
-    dst = np.zeros((framesNum, temporalDepth, src.shape[1], src.shape[2]), dtype = np.float32)
+    dst = np.zeros((framesNum, temporalDepth, src.shape[1], src.shape[2]), dtype = np.float64)
     for i in range(0, paddingDepth):
         dst[i, paddingDepth-i:temporalDepth, :, :] = src[0:temporalDepth-paddingDepth+i, :, :]
         dst[framesNum-1-i, 0:temporalDepth-paddingDepth+i, :, :] = src[framesNum-(temporalDepth-paddingDepth)-i:framesNum, :, :]
