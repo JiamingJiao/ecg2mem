@@ -66,7 +66,7 @@ class intermediateLayers(model.networks):
         return dst
 
     # save all features
-    def saveFeatures(self, dstPath, encoderStartLayer = 1, encoderEndLayer = 5, decoderStartLayer = 3, decoderEndLayer = 9, normalizationMode = 'layer'):
+    def saveFeatures(self, dstPath, encoderStartLayer = 1, encoderEndLayer = 5, decoderStartLayer = 3, decoderEndLayer = 9, normalizationMode = 'layer', resize = 0):
         features = np.empty(encoderEndLayer-encoderStartLayer+1+decoderEndLayer-decoderStartLayer+1, dtype = object)
         layersList = list()
         for encoderNum in range(encoderStartLayer, encoderEndLayer+1, 1):
@@ -94,7 +94,8 @@ class intermediateLayers(model.networks):
         minMax.close()
         if normalizationMode == 'all':
             features = 255*(features - min)/(max - min)
-        # save
+        # resize and save
+        resizedDst = np.ndarray((self.imgRows, self.imgCols), dtype = np.uint8)
         layerNum = 0
         for layerName in layersList:
             #encoderFeatures[encoderNum-startLayer] = 255*(encoderFeatures[encoderNum-startLayer]-min)/(max-min)
@@ -103,5 +104,9 @@ class intermediateLayers(model.networks):
                 os.makedirs(layerPath)
             featuresNum = features[layerNum].shape[3]
             for feature in range(0, featuresNum, 1):
-                cv.imwrite(layerPath + "/%d"%(feature+1)+".png", features[layerNum][0, :, :, feature])
+                if resize == 0:
+                    cv.imwrite(layerPath + "/%d"%(feature+1)+".png", features[layerNum][0, :, :, feature])
+                if resize == 1:
+                    resizedDst = cv.resize(features[layerNum][0, :, :, feature], (self.imgRows, self.imgCols), resizedDst, 0, 0, cv.INTER_NEAREST)
+                    cv.imwrite(layerPath + "/%d"%(feature+1)+".png", resizedDst)
             layerNum += 1
