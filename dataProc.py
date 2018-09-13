@@ -119,7 +119,7 @@ def loadData(srcDir, resize=False, srcSize=(200, 200), dstSize=(256, 256), norma
         dst = lowerBound + ((dst-min)*(upperBound-lowerBound))/(max-min)
     return dst
 
-def create3DData(src, temporalDepth):
+def create3dSequence(src, temporalDepth):
     framesNum = src.shape[0]
     paddingDepth = math.floor((temporalDepth-1)/2 + 0.1)
     dst = np.zeros((framesNum, temporalDepth, src.shape[1], src.shape[2]), dtype=DATA_TYPE)

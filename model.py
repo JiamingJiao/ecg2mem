@@ -404,7 +404,7 @@ class GAN(object):
         if self.netGName == 'uNet':
             pEcgSequence = pEcgRaw.reshape((pEcgRaw.shape[0], self.imgRows, self.imgCols, self.channels))
         elif self.netGName == 'uNet3D':
-            pEcgSequence = dataProc.create3DData(pEcgRaw, temporalDepth = self.temporalDepth)
+            pEcgSequence = dataProc.create3dSequence(pEcgRaw, temporalDepth = self.temporalDepth)
             pEcgSequence = pEcgSequence.reshape((pEcgSequence.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels))
         memRaw = dataProc.loadData(srcDir=memDir, resize=1, normalization=1, normalizationRange=dataRange, approximateData=approximateData)
         memSequence = memRaw.reshape((memRaw.shape[0], self.imgRows, self.imgCols, self.channels))
@@ -484,7 +484,7 @@ class GAN(object):
 
 
 def trainG(pEcgDir, memDir, modelDir, imgRows=256, imgCols=256, channels=1, netGName='uNet', activationG='relu', temporalDepth=None, gKernels=64, gKernelSize=4,
-epochsNum=100, lossFuncG='mae', batchSize=10, learningRateG=1e-4, earlyStoppingPatience=10, valSplit=0.2, approximateData=True):
+epochsNum=100, lossFuncG='mae', batchSize=10, learningRateG=1e-4, earlyStoppingPatience=10, valSplit=0.2, approximateData=True, continueTrain=False, pretrainedModelPath=None):
     network = networks(imgRows=imgRows, imgCols=imgCols, channels=channels, gKernels=gKernels, gKernelSize=gKernelSize, temporalDepth=temporalDepth,
     activationG=activationG)
     if activationG == 'tanh':
@@ -502,13 +502,15 @@ epochsNum=100, lossFuncG='mae', batchSize=10, learningRateG=1e-4, earlyStoppingP
         elif netGName == 'convLSTM':
             netG = network.convLstm()
         extraSequence = np.ndarray((extraRaw.shape[0], temporalDepth, imgRows, imgCols, channels), dtype=np.float32)
-        extraRaw = dataProc.create3DData(extraRaw, temporalDepth=temporalDepth)
+        extraRaw = dataProc.create3dSequence(extraRaw, temporalDepth=temporalDepth)
         extraSequence = extraRaw.reshape((extraSequence.shape[0], temporalDepth, imgRows, imgCols, channels))
     memRaw = dataProc.loadData(srcDir=memDir, resize=1, normalization=1, normalizationRange=dataRange, approximateData=approximateData)
     memSequence = np.ndarray((memRaw.shape[0], imgRows, imgCols, channels), dtype=np.float32)
     memSequence = memRaw.reshape((memRaw.shape[0], imgRows, imgCols, channels))
     netG.compile(optimizer=Adam(lr=learningRateG), loss=lossFuncG, metrics=[lossFuncG])
     netG.summary()
+    if continueTrain == True:
+        model.load_weights(preTrainedModelPath)
     checkpointer = ModelCheckpoint(modelDir+'netG_latest.h5', monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=True, mode='min')
     earlyStopping = EarlyStopping(patience=earlyStoppingPatience, verbose=1)
     print('begin to train netG')
