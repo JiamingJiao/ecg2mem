@@ -510,7 +510,7 @@ epochsNum=100, lossFuncG='mae', batchSize=10, learningRateG=1e-4, earlyStoppingP
     netG.compile(optimizer=Adam(lr=learningRateG), loss=lossFuncG, metrics=[lossFuncG])
     netG.summary()
     if continueTrain == True:
-        model.load_weights(preTrainedModelPath)
+        netG.load_weights(pretrainedModelPath)
     checkpointer = ModelCheckpoint(modelDir+'netG_latest.h5', monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=True, mode='min')
     earlyStopping = EarlyStopping(patience=earlyStoppingPatience, verbose=1)
     print('begin to train netG')
