@@ -11,7 +11,7 @@ import random
 
 DATA_TYPE = np.float64
 INTERPOLATION_METHOD = cv.INTER_NEAREST # Use nearest interpolation if it is the last step, otherwise use cubic
-VIDEO_FPS = 100
+VIDEO_FPS = 50
 VIDEO_FRAME_SIZE = (200, 200)
 PSEUDO_ECG_CONV_KERNEL = np.zeros((3, 3, 1), dtype=DATA_TYPE)
 PSEUDO_ECG_CONV_KERNEL[1, :, 0] = 1
@@ -158,10 +158,20 @@ def copyData(srcPath, dstPath, startNum=0, endNum=None, shiftNum=0):
         dstFileName = dstPath + '%06d'%(startNum+shiftNum)
         np.save(dstFileName, dst)
         startNum += 1
-
+'''
 def makeVideo(srcDir, dstPath):
     src = loadData(srcDir=srcDir, normalization=True, normalizationRange=(0, 255)).astype(np.uint8)
     writer = cv.VideoWriter(filename=dstPath, fourcc=cv.VideoWriter_fourcc(*'XVID'), fps=VIDEO_FPS, frameSize=VIDEO_FRAME_SIZE, isColor=False)
     for i in range(0, src.shape[0]):
         writer.write(src[i])
     writer.release
+'''
+
+def makeVideo(srcDir, dstPath):
+    srcPathList = sorted(glob.glob(srcDir+'*png'))
+    writer = cv.VideoWriter(filename=dstPath, fourcc=cv.VideoWriter_fourcc(*'XVID'), fps=VIDEO_FPS, frameSize=VIDEO_FRAME_SIZE, isColor=False)
+    for i in srcPathList:
+        src = cv.imread(i, -1)
+        writer.write(src)
+    writer.release
+    
