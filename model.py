@@ -11,11 +11,11 @@ import datetime
 import tensorflow as tf
 import keras
 import keras.backend as K
-from keras.models import *
+from keras.models import Model
 from keras.layers import Input, Concatenate, Conv2D, UpSampling2D, Dropout, BatchNormalization, Flatten, Dense, MaxPooling2D
 from keras.layers import Conv3D, UpSampling3D, MaxPooling3D, Reshape, Permute, Lambda, ZeroPadding3D
 from keras.layers import TimeDistributed, ConvLSTM2D
-from keras.optimizers import *
+from keras.optimizers import Adam
 from keras.callbacks import ModelCheckpoint, TensorBoard, EarlyStopping, LearningRateScheduler
 from keras.layers.advanced_activations import LeakyReLU
 from keras.utils import to_categorical
@@ -151,10 +151,10 @@ class networks(object):
         connection7 = Concatenate(axis=-1)([decoder7, encoder1])
         decoder8 = Conv3D(self.gKernels, kernel_size=(self.temporalDepth, 4, 4), activation='relu', \
         padding='same', kernel_initializer='he_normal')(UpSampling3D(size=(1,2,2))(connection7))
-        decoder9 = Conv3D(1, kernel_size=(self.temporalDepth, 4, 4), activation='relu', padding='same', kernel_initializer='he_normal')(decoder8)
-        decoder10 = Conv3D(1, kernel_size=(self.temporalDepth, 1, 1), activation=self.activationG, padding='valid', kernel_initializer='he_normal')(decoder9)
-        squeezed10 = Lambda(squeeze, output_shape=(self.imgRows, self.imgCols, self.channels), arguments={'layer':1})(decoder10)
-        model = Model(inputs=inputs, outputs=squeezed10, name='uNet3D')
+        decoder9 = Conv3D(1, kernel_size=(self.temporalDepth, 1, 1), activation='relu', padding='valid', kernel_initializer='he_normal')(decoder8)
+        squeezed10 = Lambda(squeeze, output_shape=(self.imgRows, self.imgCols, self.channels), arguments={'layer':1})(decoder9)
+        decoder11 = Conv2D(1, kernel_size=(1, 1), activation=self.activationG, padding='valid', kernel_initializer='he_normal')(squeezed10)
+        model = Model(inputs=inputs, outputs=decoder11, name='uNet3D')
         return model
     
     def convLstm(self):
@@ -380,7 +380,7 @@ class GAN(object):
             inputsA = Input((self.temporalDepth, self.imgRows, self.imgCols, self.channels))
             outputsG = self.netG(inputsA)
             temporalMid = math.floor(self.temporalDepth/2.0)
-            middleLayerOfInputs = Lambda(slice, output_shape=(1, self.imgRows, self.imgCols, self.channels), arguments={'begin':temporalMid, 'length':temporalMid+1})(inputsA)
+            middleLayerOfInputs = Lambda(slice, output_shape=(1, self.imgRows, self.imgCols, self.channels), arguments={'begin':temporalMid, 'length':1})(inputsA)
             middleLayerOfInputs = Lambda(squeeze, output_shape=(self.imgRows, self.imgCols, self.channels), arguments={'layer':1})(middleLayerOfInputs)
             inputsD = Concatenate(axis=-1)([middleLayerOfInputs, outputsG])
         outputsD = self.netD(inputsD)
@@ -530,6 +530,12 @@ def slice(src, begin, length):
 def sliceSqueeze(src, begin, length, layer):
     sliced = slice(src, begin, length)
     dst = squeeze(sliced, layer)
+    return dst
+
+def pad3d(src, gKernelSize):
+    borderSize = math.floor(gKernelSize/2)
+    paddingSize = tf.constant([[0, 0], [1, 0], [2, borderSize], [3, borderSize], [4, 0]])
+    dst = tf.pad(src, paddingSize, 'CONSTANT')
     return dst
 
 def wassersteinDistance(src1, src2):
