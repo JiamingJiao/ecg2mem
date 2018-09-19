@@ -379,8 +379,8 @@ class GAN(object):
             self.netG = self.network.uNet3D()
             inputsA = Input((self.temporalDepth, self.imgRows, self.imgCols, self.channels))
             outputsG = self.netG(inputsA)
-            temporalMid = math.floor(self.temporalDepth/2.0)
-            middleLayerOfInputs = Lambda(slice, output_shape=(1, self.imgRows, self.imgCols, self.channels), arguments={'begin':temporalMid, 'length':1})(inputsA)
+            temporalMid = math.floor(self.temporalDepth/2.0 + 0.1)
+            middleLayerOfInputs = Lambda(slice3d, output_shape=(1, self.imgRows, self.imgCols, self.channels), arguments={'begin':temporalMid, 'length':1})(inputsA)
             middleLayerOfInputs = Lambda(squeeze, output_shape=(self.imgRows, self.imgCols, self.channels), arguments={'layer':1})(middleLayerOfInputs)
             inputsD = Concatenate(axis=-1)([middleLayerOfInputs, outputsG])
         outputsD = self.netD(inputsD)
@@ -521,9 +521,9 @@ def squeeze(src, layer):
     dst = tf.squeeze(src, [layer])
     return dst
 
-def slice(src, begin, length):
+def slice3d(src, begin, length):
     #srcShape = src.shape.as_list()
-    #middleLayer = math.floor(srcShape[1]/2.0)
+    #middleLayer = math.floor(srcShape[1]/2.0 + 0.1)
     dst = tf.slice(src, [0, begin, 0, 0, 0], [-1, length, -1, -1, -1])
     return dst
 
@@ -533,7 +533,7 @@ def sliceSqueeze(src, begin, length, layer):
     return dst
 
 def pad3d(src, gKernelSize):
-    borderSize = math.floor(gKernelSize/2)
+    borderSize = math.floor(gKernelSize/2 + 0.1)
     paddingSize = tf.constant([[0, 0], [1, 0], [2, borderSize], [3, borderSize], [4, 0]])
     dst = tf.pad(src, paddingSize, 'CONSTANT')
     return dst
