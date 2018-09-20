@@ -88,69 +88,53 @@ class networks(object):
 
     def uNet3D(self):
         inputs = Input((self.temporalDepth, self.imgRows, self.imgCols, self.channels))
-        encoder1 = Conv3D(filters=self.gKernels, kernel_size=(self.temporalDepth, 4, 4), strides=(1, 2, 2), \
-        padding='same', kernel_initializer='he_normal')(inputs)
-        encoder2 = Conv3D(filters=self.gKernels*2, kernel_size=(self.temporalDepth, 4, 4), strides=(1, 2, 2), \
-        padding='same', kernel_initializer='he_normal')(encoder1)
+        encoder1 = Conv3D(filters=self.gKernels, kernel_size=self.gKernelSize, strides=(1, 2, 2), padding='same', kernel_initializer='he_normal')(inputs)
+        encoder2 = Conv3D(filters=self.gKernels*2, kernel_size=self.gKernelSize, strides=(1, 2, 2), padding='same', kernel_initializer='he_normal')(encoder1)
         encoder2 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder2)
         encoder2 = LeakyReLU(alpha=0.2)(encoder2)
-        encoder3 = Conv3D(filters=self.gKernels*4, kernel_size=(self.temporalDepth, 4, 4), strides=(1, 2, 2), \
-        padding='same', kernel_initializer='he_normal')(encoder2)
+        encoder3 = Conv3D(filters=self.gKernels*4, kernel_size=self.gKernelSize, strides=(1, 2, 2), padding='same', kernel_initializer='he_normal')(encoder2)
         encoder3 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder3)
         encoder3 = LeakyReLU(alpha=0.2)(encoder3)
-        encoder4 = Conv3D(filters=self.gKernels*8, kernel_size=(self.temporalDepth, 4, 4), strides=(1, 2, 2), \
-        padding='same', kernel_initializer='he_normal')(encoder3)
+        encoder4 = Conv3D(filters=self.gKernels*8, kernel_size=self.gKernelSize, strides=(1, 2, 2), padding='same', kernel_initializer='he_normal')(encoder3)
         encoder4 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder4)
         encoder4 = LeakyReLU(alpha=0.2)(encoder4)
-        encoder5 = Conv3D(filters=self.gKernels*8, kernel_size=(self.temporalDepth, 4, 4), strides=(1, 2, 2), \
-        padding='same', kernel_initializer='he_normal')(encoder4)
+        encoder5 = Conv3D(filters=self.gKernels*8, kernel_size=self.gKernelSize, strides=(1, 2, 2), padding='same', kernel_initializer='he_normal')(encoder4)
         encoder5 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder5)
         encoder5 = LeakyReLU(alpha=0.2)(encoder5)
-        encoder6 = Conv3D(filters=self.gKernels*8, kernel_size=(self.temporalDepth, 4, 4), strides=(1, 2, 2), \
-        padding='same', kernel_initializer='he_normal')(encoder5)
+        encoder6 = Conv3D(filters=self.gKernels*8, kernel_size=self.gKernelSize, strides=(1, 2, 2), padding='same', kernel_initializer='he_normal')(encoder5)
         encoder6 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder6)
         encoder6 = LeakyReLU(alpha=0.2)(encoder6)
-        encoder7 = Conv3D(filters=self.gKernels*8, kernel_size=(self.temporalDepth, 4, 4), strides=(1, 2, 2), \
-        padding='same', kernel_initializer='he_normal')(encoder6)
+        encoder7 = Conv3D(filters=self.gKernels*8, kernel_size=self.gKernelSize, strides=(1, 2, 2), padding='same', kernel_initializer='he_normal')(encoder6)
         encoder7 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder7)
         encoder7 = LeakyReLU(alpha=0.2)(encoder7)
-        encoder8 = Conv3D(filters=self.gKernels*8, kernel_size=(self.temporalDepth, 4, 4), strides=(1, 2, 2), \
-        padding='same', kernel_initializer='he_normal')(encoder7)
+        encoder8 = Conv3D(filters=self.gKernels*8, kernel_size=self.gKernelSize, strides=(1, 2, 2), padding='same', kernel_initializer='he_normal')(encoder7)
         encoder8 = LeakyReLU(alpha=0.2)(encoder8)
         
-        decoder1 = Conv3D(self.gKernels*8, kernel_size=(self.temporalDepth, 4, 4), activation='relu', \
-        padding='same', kernel_initializer='he_normal')(UpSampling3D(size=(1,2,2))(encoder8))
+        decoder1 = Conv3D(self.gKernels*8, kernel_size=self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(UpSampling3D(size=(1,2,2))(encoder8))
         decoder1 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(decoder1)
         decoder1 = Dropout(0.5)(decoder1)
         connection1 = Concatenate(axis=-1)([decoder1, encoder7])
-        decoder2 = Conv3D(self.gKernels*8, kernel_size=(self.temporalDepth, 4, 4), activation='relu', \
-        padding='same', kernel_initializer='he_normal')(UpSampling3D(size=(1,2,2))(connection1))
+        decoder2 = Conv3D(self.gKernels*8, kernel_size=self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(UpSampling3D(size=(1,2,2))(connection1))
         decoder2=BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(decoder2)
         decoder2 = Dropout(0.5)(decoder2)
         connection2 = Concatenate(axis=-1)([decoder2, encoder6])
-        decoder3 = Conv3D(self.gKernels*8, kernel_size=(self.temporalDepth, 4, 4), activation='relu', \
-        padding='same', kernel_initializer='he_normal')(UpSampling3D(size=(1,2,2))(connection2))
+        decoder3 = Conv3D(self.gKernels*8, kernel_size=self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(UpSampling3D(size=(1,2,2))(connection2))
         decoder3 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(decoder3)
         decoder3 = Dropout(0.5)(decoder3)
         connection3 = Concatenate(axis=-1)([decoder3, encoder5])
-        decoder4 = Conv3D(self.gKernels*8, kernel_size=(self.temporalDepth, 4, 4), activation='relu', \
-        padding='same', kernel_initializer='he_normal')(UpSampling3D(size=(1,2,2))(connection3))
+        decoder4 = Conv3D(self.gKernels*8, kernel_size=self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(UpSampling3D(size=(1,2,2))(connection3))
         decoder4 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(decoder4)
         connection4 = Concatenate(axis=-1)([decoder4, encoder4])
-        decoder5 = Conv3D(self.gKernels*8, kernel_size=(self.temporalDepth, 4, 4), activation='relu', \
-        padding='same', kernel_initializer='he_normal')(UpSampling3D(size=(1,2,2))(connection4))
+        decoder5 = Conv3D(self.gKernels*8, kernel_size=self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(UpSampling3D(size=(1,2,2))(connection4))
         decoder5 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(decoder5)
         connection5 = Concatenate(axis=-1)([decoder5, encoder3])
-        decoder6 = Conv3D(self.gKernels*4, kernel_size=(self.temporalDepth, 4, 4), activation='relu', \
-        padding='same', kernel_initializer='he_normal')(UpSampling3D(size=(1,2,2))(connection5))
+        decoder6 = Conv3D(self.gKernels*4, kernel_size=self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(UpSampling3D(size=(1,2,2))(connection5))
         decoder6 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(decoder6)
         connection6 = Concatenate(axis=-1)([decoder6, encoder2])
-        decoder7 = Conv3D(self.gKernels*2, kernel_size=(self.temporalDepth, 4, 4), activation='relu', \
-        padding='same', kernel_initializer='he_normal')(UpSampling3D(size=(1,2,2))(connection6))
+        decoder7 = Conv3D(self.gKernels*2, kernel_size=self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(UpSampling3D(size=(1,2,2))(connection6))
         decoder7 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(decoder7)
         connection7 = Concatenate(axis=-1)([decoder7, encoder1])
-        decoder8 = Conv3D(self.gKernels, kernel_size=(self.temporalDepth, 4, 4), activation='relu', \
-        padding='same', kernel_initializer='he_normal')(UpSampling3D(size=(1,2,2))(connection7))
+        decoder8 = Conv3D(self.gKernels, kernel_size=self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(UpSampling3D(size=(1,2,2))(connection7))
         decoder9 = Conv3D(1, kernel_size=(self.temporalDepth, 1, 1), activation='relu', padding='valid', kernel_initializer='he_normal')(decoder8)
         squeezed10 = Lambda(squeeze, output_shape=(self.imgRows, self.imgCols, self.channels), arguments={'layer':1})(decoder9)
         decoder11 = Conv2D(1, kernel_size=(1, 1), activation=self.activationG, padding='valid', kernel_initializer='he_normal')(squeezed10)
@@ -395,18 +379,18 @@ class GAN(object):
 
     # ((number of training samples*validation split ratio)/batch size) should be an integer
     def trainGAN(self, pEcgDir, memDir, modelDir, epochsNum=100, valSplit=0.2, continueTrain=False, pretrainedGPath=None, pretrainedDPath=None,
-    approximateData=True, trainingRatio=5, earlyStoppingPatience=10):
+    trainingRatio=5, earlyStoppingPatience=10):
         if self.activationG == 'tanh':
             dataRange = [-1., 1.]
         else:
             dataRange = [0., 1.]
-        pEcgRaw = dataProc.loadData(srcDir=pEcgDir, resize=1, normalization=1, normalizationRange=dataRange, approximateData=approximateData)
+        pEcgRaw = dataProc.loadData(srcDir=pEcgDir, resize=1, normalization=1, normalizationRange=dataRange)
         if self.netGName == 'uNet':
             pEcgSequence = pEcgRaw.reshape((pEcgRaw.shape[0], self.imgRows, self.imgCols, self.channels))
         elif self.netGName == 'uNet3D':
             pEcgSequence = dataProc.create3dSequence(pEcgRaw, temporalDepth = self.temporalDepth)
             pEcgSequence = pEcgSequence.reshape((pEcgSequence.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels))
-        memRaw = dataProc.loadData(srcDir=memDir, resize=1, normalization=1, normalizationRange=dataRange, approximateData=approximateData)
+        memRaw = dataProc.loadData(srcDir=memDir, resize=1, normalization=1, normalizationRange=dataRange)
         memSequence = memRaw.reshape((memRaw.shape[0], self.imgRows, self.imgCols, self.channels))
         print('traing data loaded')
 
@@ -456,7 +440,7 @@ class GAN(object):
         print('training completed')
 
     def diminishElectrodes(self, extraPathList, memDir, modelDir, epochsNum=100, netGOnlyEpochs=0, valSplit=0.2, continueTrain=False, pretrainedGPath=None, pretrainedDPath=None,
-    approximateData=True, trainingRatio=5, earlyStoppingPatience=10):
+    trainingRatio=5, earlyStoppingPatience=10):
         steps = len(extraPathList)
         if continueTrain == True:
             self.netG.load_weights(pretrainedGPath)
@@ -474,8 +458,7 @@ class GAN(object):
                 previousGPath = modelDir + 'model_%04d/netG_latest.h5'%(i-1)
                 previousDPath = modelDir + 'model_%04d/netD_latest.h5'%(i-1)
             self.trainGAN(pEcgDir=extraPathList[i], memDir=memDir, modelDir=currentModelPath, epochsNum=epochsNum, valSplit=valSplit,
-            continueTrain = not isFirstStep, pretrainedGPath=previousGPath, pretrainedDPath=previousDPath, approximateData=approximateData,
-            trainingRatio=trainingRatio, earlyStoppingPatience=earlyStoppingPatience)
+            continueTrain = not isFirstStep, pretrainedGPath=previousGPath, pretrainedDPath=previousDPath, trainingRatio=trainingRatio, earlyStoppingPatience=earlyStoppingPatience)
 
     def randomlyWeightedAverage(self, src):
         weights = K.random_uniform((self.batchSize, 1, 1, 1), minval=0., maxval=1.)
@@ -484,14 +467,14 @@ class GAN(object):
 
 
 def trainG(pEcgDir, memDir, modelDir, imgRows=256, imgCols=256, channels=1, netGName='uNet', activationG='relu', temporalDepth=None, gKernels=64, gKernelSize=4,
-epochsNum=100, lossFuncG='mae', batchSize=10, learningRateG=1e-4, earlyStoppingPatience=10, valSplit=0.2, approximateData=True, continueTrain=False, pretrainedModelPath=None):
+epochsNum=100, lossFuncG='mae', batchSize=10, learningRateG=1e-4, earlyStoppingPatience=10, valSplit=0.2, continueTrain=False, pretrainedModelPath=None):
     network = networks(imgRows=imgRows, imgCols=imgCols, channels=channels, gKernels=gKernels, gKernelSize=gKernelSize, temporalDepth=temporalDepth,
     activationG=activationG)
     if activationG == 'tanh':
         dataRange = [-1., 1.]
     else:
         dataRange = [0., 1.]
-    extraRaw = dataProc.loadData(srcDir=pEcgDir, resize=1, normalization=1, normalizationRange=dataRange, approximateData=approximateData)
+    extraRaw = dataProc.loadData(srcDir=pEcgDir, resize=1, normalization=1, normalizationRange=dataRange)
     if netGName == 'uNet':
         netG = network.uNet()
         extraSequence = np.ndarray((extraRaw.shape[0], imgRows, imgCols, channels), dtype=np.float32)
@@ -504,7 +487,7 @@ epochsNum=100, lossFuncG='mae', batchSize=10, learningRateG=1e-4, earlyStoppingP
         extraSequence = np.ndarray((extraRaw.shape[0], temporalDepth, imgRows, imgCols, channels), dtype=np.float32)
         extraRaw = dataProc.create3dSequence(extraRaw, temporalDepth=temporalDepth)
         extraSequence = extraRaw.reshape((extraSequence.shape[0], temporalDepth, imgRows, imgCols, channels))
-    memRaw = dataProc.loadData(srcDir=memDir, resize=1, normalization=1, normalizationRange=dataRange, approximateData=approximateData)
+    memRaw = dataProc.loadData(srcDir=memDir, resize=1, normalization=1, normalizationRange=dataRange)
     memSequence = np.ndarray((memRaw.shape[0], imgRows, imgCols, channels), dtype=np.float32)
     memSequence = memRaw.reshape((memRaw.shape[0], imgRows, imgCols, channels))
     netG.compile(optimizer=Adam(lr=learningRateG), loss=lossFuncG, metrics=[lossFuncG])

@@ -91,7 +91,7 @@ def npyToPng(srcDir, dstDir):
         cv.imwrite(dstDir + "%06d"%i+".png", src[i, :, :])
     print('convert .npy to .png completed')
 
-def loadData(srcDir, resize=False, srcSize=(200, 200), dstSize=(256, 256), normalization=False, normalizationRange=(0, 1), approximateData=False):
+def loadData(srcDir, resize=False, srcSize=(200, 200), dstSize=(256, 256), normalization=False, normalizationRange=(0, 1)):
     srcPathList = sorted(glob.glob(srcDir + '*.npy'))
     lowerBound = normalizationRange[0]
     upperBound = normalizationRange[1]
@@ -107,27 +107,27 @@ def loadData(srcDir, resize=False, srcSize=(200, 200), dstSize=(256, 256), norma
         else:
             dst[index] = src
         index += 1
-    if approximateData == True:
-        min = np.amin(dst)
-        max = np.amax(dst)
-        dst = 255*(dst-min)/(max-min)
-        dst = np.around(dst)
-        normalization = True
     if normalization == True:
-        min = np.amin(dst)
-        max = np.amax(dst)
-        dst = lowerBound + ((dst-min)*(upperBound-lowerBound))/(max-min)
+        minValue = np.amin(dst)
+        maxValue = np.amax(dst)
+        dst = lowerBound + ((dst-minValue)*(upperBound-lowerBound))/(maxValue-minValue)
+    dst = dst.reshape((dst.shape[0], dst.shape[1], dst.shape[2], 1))
     return dst
 
-def create3dSequence(src, temporalDepth):
-    framesNum = src.shape[0]
-    paddingDepth = math.floor((temporalDepth-1)/2 + 0.1)
-    dst = np.zeros((framesNum, temporalDepth, src.shape[1], src.shape[2]), dtype=DATA_TYPE)
-    for i in range(0, paddingDepth):
-        dst[i, paddingDepth-i:temporalDepth, :, :] = src[0:temporalDepth-paddingDepth+i, :, :]
-        dst[framesNum-1-i, 0:temporalDepth-paddingDepth+i, :, :] = src[framesNum-(temporalDepth-paddingDepth)-i:framesNum, :, :]
-    for i in range(paddingDepth, framesNum-paddingDepth):
-        dst[i, :, :, :] = src[i-paddingDepth:i+paddingDepth+1, :, :]
+def create3dSequence(srcDirList, temporalDepth, dstSize=(256, 256)):
+    pEcg = np.empty(len(srcDirList), dtype=object)
+    mem = np.empty(len(srcDirList), dtype=object)
+    i = 0
+    for srcDir in srcDirList:
+        srcPEcg = loadData(srcDir=srcDir+'pseudo_ecg/', resize=True, srcSize=srcSize, dstSize=dstSize, normalization=False)
+        framesNum = pEcg.shape[0]-temporalDepth+1
+        pEcg[i] = np.zeros((framesNum, temporalDepth, pEcg.shape[1], pEcg.shape[2], pEcg.shape[3]), dtype=DATA_TYPE)
+        for j in range(0, framesNum-temporalDepth+1):
+            pEcg[j] = src[j:j+temporalDepth]
+        srcMem = loadData(srcDir=srcDir+'mem/', resize=True, srcSize=srcSize, dstSize=dstSize, normalization=False)
+        mem[i] = srcMem[temporalDepth:srcMem.shape[0]]
+        i += 1
+    
     return dst
 
 def splitTrainAndVal(src1, src2, valSplit):
