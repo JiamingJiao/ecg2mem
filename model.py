@@ -465,7 +465,7 @@ class GAN(object):
         dst = (weights*src[0]) + ((1-weights)*src[1])
         return dst
 
-
+'''
 def trainG(pEcgDir, memDir, modelDir, imgRows=256, imgCols=256, channels=1, netGName='uNet', activationG='relu', temporalDepth=None, gKernels=64, gKernelSize=4,
 epochsNum=100, lossFuncG='mae', batchSize=10, learningRateG=1e-4, earlyStoppingPatience=10, valSplit=0.2, continueTrain=False, pretrainedModelPath=None):
     network = networks(imgRows=imgRows, imgCols=imgCols, channels=channels, gKernels=gKernels, gKernelSize=gKernelSize, temporalDepth=temporalDepth,
@@ -499,6 +499,7 @@ epochsNum=100, lossFuncG='mae', batchSize=10, learningRateG=1e-4, earlyStoppingP
     print('begin to train netG')
     historyG = netG.fit(x=extraSequence, y=memSequence, batch_size=batchSize, epochs=epochsNum, verbose=2, shuffle=True, validation_split=valSplit,
     callbacks=[checkpointer, earlyStopping])
+'''
 
 def squeeze(src, layer):
     dst = tf.squeeze(src, [layer])
@@ -511,7 +512,7 @@ def slice3d(src, begin, length):
     return dst
 
 def sliceSqueeze(src, begin, length, layer):
-    sliced = slice(src, begin, length)
+    sliced = slice3d(src, begin, length)
     dst = squeeze(sliced, layer)
     return dst
 
