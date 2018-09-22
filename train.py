@@ -23,9 +23,16 @@ gKernels=64, gKernelSize=4, epochsNum=100, batchSize=10, learningRateG=1e-4, ear
     print('begin to train netG')
     historyG = netG.fit(x=pEcg, y=mem, batch_size=batchSize, epochs=epochsNum, verbose=2, shuffle=True, validation_split=valSplit, callbacks=[checkpointer, earlyStopping])
 
-'''
 def prediction(srcDirList, dstDirList, modelDir, electrodesNum, rawSize=(200, 200), imgSize=(256, 256), channels=1, netGName='uNet', activationG='relu', lossFuncG='mae',
 temporalDepth=None, gKernels=64, gKernelSize=4):
     network = networks(imgRows=imgSize[0], imgCols=imgSize[1], channels=channels, gKernels=gKernels, gKernelSize=gKernelSize, temporalDepth=temporalDepth)
     for srcDir in srcDirList:
-'''
+        if activationG == 'tanh':
+        normalizationRange = [-1., 1.]
+    else:
+        normalizationRange = [0., 1.]
+    if netGName == 'convLstm':
+        netG = network.convLstm()
+        pEcg = dataProc.createRnnSequence(srcDirList, electrodesNum, temporalDepth, rawSize, imgSize, normalizationRange)[0]
+    netG.load_weights(modelDir)
+    
