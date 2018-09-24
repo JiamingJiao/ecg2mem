@@ -13,7 +13,7 @@ gKernels=64, gKernelSize=4, epochsNum=100, batchSize=10, learningRateG=1e-4, ear
         normalizationRange = [0., 1.]
     if netGName == 'convLstm':
         netG = network.convLstm()
-        pEcg, mem = dataProc.createRnnSequence(dataDirList, electrodesNum, temporalDepth, rawSize, imgSize, normalizationRange)
+        pEcg, mem = dataProc.mergeSequence(dataDirList, electrodesNum, temporalDepth, netGName, rawSize, imgSize, normalizationRange)
     netG.compile(optimizer=Adam(lr=learningRateG), loss=lossFuncG, metrics=[lossFuncG])
     netG.summary()
     if continueTrain == True:
@@ -28,11 +28,10 @@ temporalDepth=None, gKernels=64, gKernelSize=4):
     network = networks(imgRows=imgSize[0], imgCols=imgSize[1], channels=channels, gKernels=gKernels, gKernelSize=gKernelSize, temporalDepth=temporalDepth)
     for srcDir in srcDirList:
         if activationG == 'tanh':
-        normalizationRange = [-1., 1.]
-    else:
-        normalizationRange = [0., 1.]
+            normalizationRange = [-1, 1]
+        else:
+            normalizationRange = [0, 1]
     if netGName == 'convLstm':
         netG = network.convLstm()
-        pEcg = dataProc.createRnnSequence(srcDirList, electrodesNum, temporalDepth, rawSize, imgSize, normalizationRange)[0]
     netG.load_weights(modelDir)
     

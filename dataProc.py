@@ -118,7 +118,47 @@ def loadData(srcDir, resize=False, srcSize=(200, 200), dstSize=(256, 256), norma
     dst = dst.reshape((dst.shape[0], dst.shape[1], dst.shape[2], 1))
     return dst
 
+def createRnnSequence(srcEcg, srcMem, temporalDepth):
+    framesNum = srcEcg.shape[0]-temporalDepth
+    dstEcg = np.zeros((framesNum, temporalDepth, srcEcg.shape[0], srcEcg.shape[1], srcEcg.shape[2]), dtype=DATA_TYPE)
+    for i in range(0, framesNum-temporalDepth+1):
+        dstEcg[i] = srcEcg[i:i+temporalDepth]
+    dstMem = srcMem[temporalDepth:srcMem.shape[0]]
+    return dstEcg, dstMem
+
+def create3dSequence(srcEcg, srcMem, temporalDepth):
+    abandonLength = math.floor(temporalDepth/2 + 0.1)
+    framesNum = srcEcg.shape[0] - abandonLength*2
+    dstEcg = np.zeros((framesNum, temporalDepth, srcEcg.shape[0], srcEcg.shape[1], srcEcg.shape[2]), dtype=DATA_TYPE)
+    for i in range(0, framesNum-temporalDepth+1):
+        dstEcg[i] = srcEcg[i:i+temporalDepth]
+    dstMem = srcMem[abandonLength:framesNum+abandonLength]
+    return dstEcg, dstMem
+
+def mergeSequence(srcDirList, electrodesNum, temporalDepth, netGName=None, srcSize=(200, 200), dstSize=(256, 256), normalizationRange=(0, 1)):
+    ecgList = np.empty(len(srcDirList), dtype=object)
+    memList = np.empty(len(srcDirList), dtype=object)
+    i = 0
+    for srcDir in srcDirList:
+        srcEcg = loadData(srcDir=srcDir+ECG_FOLDER_NAME+'_%d/'%electrodesNum, resize=True, srcSize=srcSize, dstSize=dstSize, normalization=False)
+        srcMem = loadData(srcDir=srcDir+MEM_FOLDER_NAME+'/', resize=True, srcSize=srcSize, dstSize=dstSize, normalization=False)
+        if netGName = 'convLstm':
+            ecgList[i], memList[i] = createRnnSequence(srcEcg, srcMem, temporalDepth)
+        elif netGName = 'uNet3d':
+            ecgList[i], memList[i] = createRnnSequence(srcEcg, srcMem, temporalDepth)
+        i += 1
+    ecg = np.concatenate(ecgList)
+    mem = np.concatenate(memList)
+    ecg, minEcg, maxEcg = normalization(ecg)
+    mem, minMem, maxMem = normalization(mem)
+    print('min ecg is %.8f'%minEcg)
+    print('max ecg is %.8f'%maxEcg)
+    print('min mem is %.8f'%minMem)
+    print('max mem is %.8f'%maxMem)
+    return [ecg, mem]
+
 # prepare data for RNN
+'''
 def createRnnSequence(srcDirList, electrodesNum, temporalDepth, srcSize=(200, 200), dstSize=(256, 256), normalizationRange=(0, 1)):
     ecgList = np.empty(len(srcDirList), dtype=object)
     memList = np.empty(len(srcDirList), dtype=object)
@@ -145,8 +185,9 @@ def createRnnSequence(srcDirList, electrodesNum, temporalDepth, srcSize=(200, 20
     print('min mem is %.8f'%minMem)
     print('max mem is %.8f'%maxMem)
     return [ecg, mem]
-
+'''
 # prepare data for 3d u-Net, temporal depth of 3d u-Net must be a odd number
+'''
 def create3dSequence(srcDirList, electrodesNum, temporalDepth, srcSize=(200, 200), dstSize=(256, 256), normalizationRange=(0, 1)):
     ecgList = np.empty(len(srcDirList), dtype=object)
     memList = np.empty(len(srcDirList), dtype=object)
@@ -174,6 +215,7 @@ def create3dSequence(srcDirList, electrodesNum, temporalDepth, srcSize=(200, 200
     print('min mem is %.8f'%minMem)
     print('max mem is %.8f'%maxMem)
     return [ecg, mem]
+'''
 
 def splitTrainAndVal(src1, src2, valSplit):
     srcLength = src1.shape[0]
@@ -203,14 +245,16 @@ def copyData(srcPath, dstPath, startNum=0, endNum=None, shiftNum=0):
         dstFileName = dstPath + '%06d'%(startNum+shiftNum)
         np.save(dstFileName, dst)
         startNum += 1
-'''
-def makeVideo(srcDir, dstPath):
-    src = loadData(srcDir=srcDir, normalization=True, normalizationRange=(0, 255)).astype(np.uint8)
-    writer = cv.VideoWriter(filename=dstPath, fourcc=cv.VideoWriter_fourcc(*'XVID'), fps=VIDEO_FPS, frameSize=VIDEO_FRAME_SIZE, isColor=False)
-    for i in range(0, src.shape[0]):
-        writer.write(src[i])
-    writer.release
-'''
+    
+def normalization(src, dst, normalizationRange=(0, 1)):
+    minValue = np.amin(src)
+    maxValue = np.amax(src)
+    dst = normalizationRange[0] + ((src-minValue)*(normalizationRange[1]-normalizationRange[0])) / (maxValue-minValue)
+    return [dst, minValue, maxValue]
+
+def scale(src, dst, priorRange=None, dstRange=(0, 1)):
+    dst = normalizationRange[0] + ((mem-priorRange[0])*(normalizationRange[1]-normalizationRange[0])) / (priorRange[1]-priorRange[0])
+    return dst
 
 def makeVideo(srcDir, dstPath):
     srcPathList = sorted(glob.glob(srcDir+'*png'))
