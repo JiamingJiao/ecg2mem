@@ -56,4 +56,4 @@ activationG='relu', lossFuncG='mae', temporalDepth=None, gKernels=64, gKernelSiz
         for i in range (0, mem.shape[0]):
             resizedMem = cv.resize(mem[i], rawSize)
             np.save(npyDir+'%06d.npy'%i, resizedMem)
-            cv.imwrite(pngDir+'%06d.npy'%i, pngMem[i])
+            cv.imwrite(pngDir+'%06d.png'%i, pngMem[i])

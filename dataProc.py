@@ -69,6 +69,7 @@ class Calculation(object):
         for row in range(0, samplePoints[0]):
             for col in range(0, samplePoints[1]):
                 distance = cv.magnitude((rowIndex - row*rowStride), (colIndex - col*colStride))
+                distance = distance.astype(DATA_TYPE)
                 pseudoEcg[row, col] = cv.sumElems(cv.divide(diffV, distance))[0]
         self.dst = cv.resize(pseudoEcg, (src.shape[0], src.shape[1]), self.dst, 0, 0, INTERPOLATION_METHOD)
         return self.dst
@@ -134,7 +135,7 @@ def create3dEcg(src, temporalDepth, netGName):
         framesNum = src.shape[0]-temporalDepth
     elif netGName == 'uNet3d':
         framesNum = src.shape[0] - 2*math.floor(temporalDepth/2 + 0.1)
-    dst = np.zeros((framesNum, temporalDepth, src.shape[0], src.shape[1], src.shape[2]), dtype=DATA_TYPE)
+    dst = np.zeros((framesNum, temporalDepth, src.shape[1], src.shape[2], src.shape[3]), dtype=DATA_TYPE)
     for i in range(0, framesNum-temporalDepth+1):
         dst[i] = src[i:i+temporalDepth]
     return dst
