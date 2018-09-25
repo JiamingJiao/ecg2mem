@@ -22,7 +22,7 @@ from keras.utils import to_categorical
 
 import dataProc
 
-class networks(object):
+class Networks(object):
     def __init__(self, imgRows=256, imgCols=256, channels=1, gKernels=64, dKernels=64, gKernelSize=4, temporalDepth=None, activationG=None, **kwargs):
         self.imgRows = imgRows
         self.imgCols = imgCols
@@ -86,7 +86,7 @@ class networks(object):
         model = Model(inputs=inputs, outputs=decoder9, name='uNet')
         return model
 
-    def uNet3D(self):
+    def uNet3d(self):
         inputs = Input((self.temporalDepth, self.imgRows, self.imgCols, self.channels))
         encoder1 = Conv3D(filters=self.gKernels, kernel_size=self.gKernelSize, strides=(1, 2, 2), padding='same', kernel_initializer='he_normal')(inputs)
         encoder2 = Conv3D(filters=self.gKernels*2, kernel_size=self.gKernelSize, strides=(1, 2, 2), padding='same', kernel_initializer='he_normal')(encoder1)
@@ -138,7 +138,7 @@ class networks(object):
         decoder9 = Conv3D(1, kernel_size=(self.temporalDepth, 1, 1), activation='relu', padding='valid', kernel_initializer='he_normal')(decoder8)
         squeezed10 = Lambda(squeeze, output_shape=(self.imgRows, self.imgCols, self.channels), arguments={'layer':1})(decoder9)
         decoder11 = Conv2D(1, kernel_size=(1, 1), activation=self.activationG, padding='valid', kernel_initializer='he_normal')(squeezed10)
-        model = Model(inputs=inputs, outputs=decoder11, name='uNet3D')
+        model = Model(inputs=inputs, outputs=decoder11, name='uNet3d')
         return model
     
     def convLstm(self):
@@ -320,7 +320,7 @@ class GAN(object):
         self.learningRateD = learningRateD
         self.activationG = activationG
         self.batchSize = batchSize
-        self.network = networks(imgRows=self.imgRows, imgCols=self.imgCols, channels=self.channels, gKernels=gKernels, dKernels=dKernels, gKernelSize=gKernelSize,
+        self.network = Networks(imgRows=self.imgRows, imgCols=self.imgCols, channels=self.channels, gKernels=gKernels, dKernels=dKernels, gKernelSize=gKernelSize,
         temporalDepth=self.temporalDepth,activationG=self.activationG)
         if self.netDName == 'straight3':
             self.netD = self.network.straight3()
@@ -335,8 +335,8 @@ class GAN(object):
             outputsGForGradient = self.netG(inputsGForGradient)
             realPair = Concatenate(axis=-1)([inputsGForGradient, real])
             fakePair = Concatenate(axis=-1)([inputsGForGradient, outputsGForGradient])
-        elif self.netGName == 'uNet3D':
-            self.netG = self.network.uNet3D()
+        elif self.netGName == 'uNet3d':
+            self.netG = self.network.uNet3d()
             inputsGForGradient = Input((self.temporalDepth, self.imgRows, self.imgCols, self.channels))
             self.netG.trainable = False
             inputsGForGradient = Input((self.temporalDepth, self.imgRows, self.imgCols, self.channels))
@@ -359,8 +359,8 @@ class GAN(object):
             inputsA = Input((self.imgRows, self.imgCols, self.channels))
             outputsG = self.netG(inputsA)
             inputsD = Concatenate(axis=-1)([inputsA, outputsG])
-        elif self.netGName == 'uNet3D':
-            self.netG = self.network.uNet3D()
+        elif self.netGName == 'uNet3d':
+            self.netG = self.network.uNet3d()
             inputsA = Input((self.temporalDepth, self.imgRows, self.imgCols, self.channels))
             outputsG = self.netG(inputsA)
             temporalMid = math.floor(self.temporalDepth/2.0 + 0.1)
@@ -387,7 +387,7 @@ class GAN(object):
         pEcgRaw = dataProc.loadData(srcDir=pEcgDir, resize=1, normalization=1, normalizationRange=dataRange)
         if self.netGName == 'uNet':
             pEcgSequence = pEcgRaw.reshape((pEcgRaw.shape[0], self.imgRows, self.imgCols, self.channels))
-        elif self.netGName == 'uNet3D':
+        elif self.netGName == 'uNet3d':
             pEcgSequence = dataProc.create3dSequence(pEcgRaw, temporalDepth = self.temporalDepth)
             pEcgSequence = pEcgSequence.reshape((pEcgSequence.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels))
         memRaw = dataProc.loadData(srcDir=memDir, resize=1, normalization=1, normalizationRange=dataRange)
@@ -464,42 +464,6 @@ class GAN(object):
         weights = K.random_uniform((self.batchSize, 1, 1, 1), minval=0., maxval=1.)
         dst = (weights*src[0]) + ((1-weights)*src[1])
         return dst
-
-'''
-def trainG(pEcgDir, memDir, modelDir, imgRows=256, imgCols=256, channels=1, netGName='uNet', activationG='relu', temporalDepth=None, gKernels=64, gKernelSize=4,
-epochsNum=100, lossFuncG='mae', batchSize=10, learningRateG=1e-4, earlyStoppingPatience=10, valSplit=0.2, continueTrain=False, pretrainedModelPath=None):
-    network = networks(imgRows=imgRows, imgCols=imgCols, channels=channels, gKernels=gKernels, gKernelSize=gKernelSize, temporalDepth=temporalDepth,
-    activationG=activationG)
-    if activationG == 'tanh':
-        dataRange = [-1., 1.]
-    else:
-        dataRange = [0., 1.]
-    extraRaw = dataProc.loadData(srcDir=pEcgDir, resize=1, normalization=1, normalizationRange=dataRange)
-    if netGName == 'uNet':
-        netG = network.uNet()
-        extraSequence = np.ndarray((extraRaw.shape[0], imgRows, imgCols, channels), dtype=np.float32)
-        extraSequence = extraRaw.reshape((extraRaw.shape[0], imgRows, imgCols, channels))
-    elif (netGName=='uNet3D') or (netGName=='convLSTM'):
-        if netGName == 'uNet3D':
-            netG = network.uNet3D()
-        elif netGName == 'convLSTM':
-            netG = network.convLstm()
-        extraSequence = np.ndarray((extraRaw.shape[0], temporalDepth, imgRows, imgCols, channels), dtype=np.float32)
-        extraRaw = dataProc.create3dSequence(extraRaw, temporalDepth=temporalDepth)
-        extraSequence = extraRaw.reshape((extraSequence.shape[0], temporalDepth, imgRows, imgCols, channels))
-    memRaw = dataProc.loadData(srcDir=memDir, resize=1, normalization=1, normalizationRange=dataRange)
-    memSequence = np.ndarray((memRaw.shape[0], imgRows, imgCols, channels), dtype=np.float32)
-    memSequence = memRaw.reshape((memRaw.shape[0], imgRows, imgCols, channels))
-    netG.compile(optimizer=Adam(lr=learningRateG), loss=lossFuncG, metrics=[lossFuncG])
-    netG.summary()
-    if continueTrain == True:
-        netG.load_weights(pretrainedModelPath)
-    checkpointer = ModelCheckpoint(modelDir+'netG_latest.h5', monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=True, mode='min')
-    earlyStopping = EarlyStopping(patience=earlyStoppingPatience, verbose=1)
-    print('begin to train netG')
-    historyG = netG.fit(x=extraSequence, y=memSequence, batch_size=batchSize, epochs=epochsNum, verbose=2, shuffle=True, validation_split=valSplit,
-    callbacks=[checkpointer, earlyStopping])
-'''
 
 def squeeze(src, layer):
     dst = tf.squeeze(src, [layer])

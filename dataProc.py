@@ -11,8 +11,10 @@ import random
 
 DATA_TYPE = np.float32
 INTERPOLATION_METHOD = cv.INTER_NEAREST # Use nearest interpolation if it is the last step, otherwise use cubic
+NORM_RANGE = (0, 1)
+
 VIDEO_FPS = 50
-VIDEO_FRAME_SIZE = (200, 200)
+IMG_SIZE = (200, 200)
 PSEUDO_ECG_CONV_KERNEL = np.zeros((3, 3, 1), dtype=DATA_TYPE)
 PSEUDO_ECG_CONV_KERNEL[1, :, 0] = 1
 PSEUDO_ECG_CONV_KERNEL[:, 1, 0] = 1
@@ -20,7 +22,7 @@ PSEUDO_ECG_CONV_KERNEL[1, 1, 0] = -4
 ECG_FOLDER_NAME = 'pseudo_ecg'
 MEM_FOLDER_NAME = 'mem'
 
-class calculation(object):
+class Calculation(object):
     def __init__(self, dst=None, shape=None):
         self.dst = dst
         if not type(self.dst) is np.ndarray:
@@ -80,7 +82,7 @@ def callCalc(srcDir, dstDir, methodName, **kwargs):
         os.makedirs(dstDir)
     src = loadData(srcDir)
     dst = np.ndarray(src[0].shape, dtype=DATA_TYPE)
-    calc = calculation(dst=dst)
+    calc = Calculation(dst=dst)
     method = getattr(calc, methodName)
     for i in range(0, src.shape[0]):
         dst = method(src=src[i], **kwargs)
@@ -95,7 +97,7 @@ def npyToPng(srcDir, dstDir):
         cv.imwrite(dstDir + "%06d"%i+".png", src[i, :, :])
     print('convert .npy to .png completed')
 
-def loadData(srcDir, resize=False, srcSize=(200, 200), dstSize=(256, 256), normalization=False, normalizationRange=(0, 1)):
+def loadData(srcDir, resize=False, srcSize=(200, 200), dstSize=(256, 256), normalization=False, normalizationRange=NORM_RANGE):
     srcPathList = sorted(glob.glob(srcDir + '*.npy'))
     lowerBound = normalizationRange[0]
     upperBound = normalizationRange[1]
@@ -118,104 +120,47 @@ def loadData(srcDir, resize=False, srcSize=(200, 200), dstSize=(256, 256), norma
     dst = dst.reshape((dst.shape[0], dst.shape[1], dst.shape[2], 1))
     return dst
 
-def createRnnSequence(srcEcg, srcMem, temporalDepth):
-    framesNum = srcEcg.shape[0]-temporalDepth
-    dstEcg = np.zeros((framesNum, temporalDepth, srcEcg.shape[0], srcEcg.shape[1], srcEcg.shape[2]), dtype=DATA_TYPE)
-    for i in range(0, framesNum-temporalDepth+1):
-        dstEcg[i] = srcEcg[i:i+temporalDepth]
-    dstMem = srcMem[temporalDepth:srcMem.shape[0]]
+def create3dSequence(srcEcg, srcMem, temporalDepth, netGName):
+    dstEcg = create3dEcg(srcEcg, temporalDepth, netGName)
+    if netGName == 'convLstm':
+        startFrame = temporalDepth
+    if netGName == 'uNet3d':
+        startFrame = math.floor(temporalDepth/2 + 0.1)
+    dstMem = srcMem[startFrame:dstEcg.shape[0]+startFrame]
     return dstEcg, dstMem
 
-def create3dSequence(srcEcg, srcMem, temporalDepth):
-    abandonLength = math.floor(temporalDepth/2 + 0.1)
-    framesNum = srcEcg.shape[0] - abandonLength*2
-    dstEcg = np.zeros((framesNum, temporalDepth, srcEcg.shape[0], srcEcg.shape[1], srcEcg.shape[2]), dtype=DATA_TYPE)
+def create3dEcg(src, temporalDepth, netGName):
+    if netGName == 'convLstm':
+        framesNum = src.shape[0]-temporalDepth
+    elif netGName == 'uNet3d':
+        framesNum = src.shape[0] - 2*math.floor(temporalDepth/2 + 0.1)
+    dst = np.zeros((framesNum, temporalDepth, src.shape[0], src.shape[1], src.shape[2]), dtype=DATA_TYPE)
     for i in range(0, framesNum-temporalDepth+1):
-        dstEcg[i] = srcEcg[i:i+temporalDepth]
-    dstMem = srcMem[abandonLength:framesNum+abandonLength]
-    return dstEcg, dstMem
+        dst[i] = src[i:i+temporalDepth]
+    return dst
 
-def mergeSequence(srcDirList, electrodesNum, temporalDepth, netGName=None, srcSize=(200, 200), dstSize=(256, 256), normalizationRange=(0, 1)):
+def mergeSequence(srcDirList, electrodesNum, temporalDepth, netGName=None, srcSize=(200, 200), dstSize=(256, 256), normalizationRange=NORM_RANGE):
     ecgList = np.empty(len(srcDirList), dtype=object)
     memList = np.empty(len(srcDirList), dtype=object)
     i = 0
     for srcDir in srcDirList:
         srcEcg = loadData(srcDir=srcDir+ECG_FOLDER_NAME+'_%d/'%electrodesNum, resize=True, srcSize=srcSize, dstSize=dstSize, normalization=False)
         srcMem = loadData(srcDir=srcDir+MEM_FOLDER_NAME+'/', resize=True, srcSize=srcSize, dstSize=dstSize, normalization=False)
-        if netGName = 'convLstm':
-            ecgList[i], memList[i] = createRnnSequence(srcEcg, srcMem, temporalDepth)
-        elif netGName = 'uNet3d':
-            ecgList[i], memList[i] = createRnnSequence(srcEcg, srcMem, temporalDepth)
+        if netGName=='convLstm' or netGName=='uNet3d':
+            ecgList[i], memList[i] = create3dSequence(srcEcg, srcMem, temporalDepth, netGName)
+        if netGName=='uNet':
+            ecgList[i] = srcEcg
+            memList[i] = srcMem
         i += 1
     ecg = np.concatenate(ecgList)
     mem = np.concatenate(memList)
-    ecg, minEcg, maxEcg = normalization(ecg)
-    mem, minMem, maxMem = normalization(mem)
+    ecg, minEcg, maxEcg = normalize(ecg, normalizationRange)
+    mem, minMem, maxMem = normalize(mem, normalizationRange)
     print('min ecg is %.8f'%minEcg)
     print('max ecg is %.8f'%maxEcg)
     print('min mem is %.8f'%minMem)
     print('max mem is %.8f'%maxMem)
     return [ecg, mem]
-
-# prepare data for RNN
-'''
-def createRnnSequence(srcDirList, electrodesNum, temporalDepth, srcSize=(200, 200), dstSize=(256, 256), normalizationRange=(0, 1)):
-    ecgList = np.empty(len(srcDirList), dtype=object)
-    memList = np.empty(len(srcDirList), dtype=object)
-    i = 0
-    for srcDir in srcDirList:
-        srcEcg = loadData(srcDir=srcDir+ECG_FOLDER_NAME+'_%d/'%electrodesNum, resize=True, srcSize=srcSize, dstSize=dstSize, normalization=False)
-        framesNum = srcEcg.shape[0]-temporalDepth
-        ecgList[i] = np.zeros((framesNum, temporalDepth, srcEcg.shape[1], srcEcg.shape[2], srcEcg.shape[3]), dtype=DATA_TYPE)
-        for j in range(0, framesNum-temporalDepth+1):
-            ecgList[i][j] = srcEcg[j:j+temporalDepth]
-        srcMem = loadData(srcDir=srcDir+MEM_FOLDER_NAME+'/', resize=True, srcSize=srcSize, dstSize=dstSize, normalization=False)
-        memList[i] = srcMem[temporalDepth:srcMem.shape[0]]
-        i += 1
-    ecg = np.concatenate(ecgList)
-    mem = np.concatenate(memList)
-    minEcg = np.amin(ecg)
-    maxEcg = np.amax(ecg)
-    ecg = normalizationRange[0] + ((ecg-minEcg)*(normalizationRange[1]-normalizationRange[0])) / (maxEcg-minEcg)
-    minMem = np.amin(mem)
-    maxMem = np.amax(mem)
-    mem = normalizationRange[0] + ((mem-minMem)*(normalizationRange[1]-normalizationRange[0])) / (maxMem-minMem)
-    print('min ecg is %.8f'%minEcg)
-    print('max ecg is %.8f'%maxEcg)
-    print('min mem is %.8f'%minMem)
-    print('max mem is %.8f'%maxMem)
-    return [ecg, mem]
-'''
-# prepare data for 3d u-Net, temporal depth of 3d u-Net must be a odd number
-'''
-def create3dSequence(srcDirList, electrodesNum, temporalDepth, srcSize=(200, 200), dstSize=(256, 256), normalizationRange=(0, 1)):
-    ecgList = np.empty(len(srcDirList), dtype=object)
-    memList = np.empty(len(srcDirList), dtype=object)
-    abandonLength = math.floor(temporalDepth/2 + 0.1)
-    i = 0
-    for srcDir in srcDirList:
-        srcEcg = loadData(srcDir=srcDir+ECG_FOLDER_NAME+'_%d/'%electrodesNum, resize=True, srcSize=srcSize, dstSize=dstSize, normalization=False)
-        framesNum = srcEcg.shape[0] - abandonLength*2
-        ecgList[i] = np.zeros((framesNum, temporalDepth, srcEcg.shape[1], srcEcg.shape[2], srcEcg.shape[3]), dtype=DATA_TYPE)
-        for j in range(0, framesNum-temporalDepth+1):
-            ecgList[i][j] = srcEcg[j:j+temporalDepth]
-        srcMem = loadData(srcDir=srcDir+MEM_FOLDER_NAME+'/', resize=True, srcSize=srcSize, dstSize=dstSize, normalization=False)
-        memList[i] = srcMem[abandonLength:framesNum+abandonLength]
-        i += 1
-    ecg = np.concatenate(ecgList)
-    mem = np.concatenate(memList)
-    minEcg = np.amin(ecg)
-    maxEcg = np.amax(ecg)
-    ecg = normalizationRange[0] + ((ecg-minEcg)*(normalizationRange[1]-normalizationRange[0])) / (maxEcg-minEcg)
-    minMem = np.amin(mem)
-    maxMem = np.amax(mem)
-    mem = normalizationRange[0] + ((mem-minMem)*(normalizationRange[1]-normalizationRange[0])) / (maxMem-minMem)
-    print('min ecg is %.8f'%minEcg)
-    print('max ecg is %.8f'%maxEcg)
-    print('min mem is %.8f'%minMem)
-    print('max mem is %.8f'%maxMem)
-    return [ecg, mem]
-'''
 
 def splitTrainAndVal(src1, src2, valSplit):
     srcLength = src1.shape[0]
@@ -246,19 +191,19 @@ def copyData(srcPath, dstPath, startNum=0, endNum=None, shiftNum=0):
         np.save(dstFileName, dst)
         startNum += 1
     
-def normalization(src, dst, normalizationRange=(0, 1)):
+def normalize(src, normalizationRange=NORM_RANGE):
     minValue = np.amin(src)
     maxValue = np.amax(src)
     dst = normalizationRange[0] + ((src-minValue)*(normalizationRange[1]-normalizationRange[0])) / (maxValue-minValue)
     return [dst, minValue, maxValue]
 
-def scale(src, dst, priorRange=None, dstRange=(0, 1)):
-    dst = normalizationRange[0] + ((mem-priorRange[0])*(normalizationRange[1]-normalizationRange[0])) / (priorRange[1]-priorRange[0])
+def scale(src, priorRange=None, dstRange=(0, 1)):
+    dst = dstRange[0] + ((src-priorRange[0])*(dstRange[1]-dstRange[0])) / (priorRange[1]-priorRange[0])
     return dst
 
 def makeVideo(srcDir, dstPath):
     srcPathList = sorted(glob.glob(srcDir+'*png'))
-    writer = cv.VideoWriter(filename=dstPath, fourcc=cv.VideoWriter_fourcc(*'XVID'), fps=VIDEO_FPS, frameSize=VIDEO_FRAME_SIZE, isColor=False)
+    writer = cv.VideoWriter(filename=dstPath, fourcc=cv.VideoWriter_fourcc(*'XVID'), fps=VIDEO_FPS, frameSize=IMG_SIZE, isColor=False)
     for i in srcPathList:
         src = cv.imread(i, -1)
         writer.write(src)

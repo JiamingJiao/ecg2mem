@@ -5,9 +5,13 @@ import cv2 as cv
 import numpy as np
 import math
 import os
+import glob
+import keras.backend as K
+
+import opmap
+
 import dataProc
 import model
-import keras.backend as K
 
 def calculateMAE(src1, src2):
     difference = np.subtract(src1, src2)
@@ -47,15 +51,15 @@ def histSpecification(src, transArray):
             dst[i, j] = transArray[src[i, j]]
     return dst
 
-class intermediateLayers(model.networks):
+class IntermediateLayers(model.Networks):
     def __init__(self, src, netName = 'uNet', weightsPath = None, **kwargs):
-        super(intermediateLayers, self).__init__(**kwargs)
+        super(IntermediateLayers, self).__init__(**kwargs)
         self.netName = netName
         if self.netName == 'uNet':
             resizedSrc = np.ndarray((self.imgRows, self.imgCols), dtype = np.float32)
             resizedSrc = cv.resize(src, (self.imgRows, self.imgCols), resizedSrc, 0, 0, cv.INTER_NEAREST)
             self.input = resizedSrc[np.newaxis, :, :, np.newaxis]
-            self.network = super(intermediateLayers, self).uNet()
+            self.network = super(IntermediateLayers, self).uNet()
         self.network.load_weights(weightsPath)
         self.inputTensor = self.network.layers[0].input
 
@@ -75,8 +79,8 @@ class intermediateLayers(model.networks):
             layersList.append('decoder' + '%d'%decoderNum)
         # calculate intermediate layers
         layerNum = 0
-        max = -np.inf
-        min = np.inf
+        maxValue = -np.inf
+        minValue = np.inf
         minMax = open(dstPath + 'min_max.txt', 'w+')
         for layerName in layersList:
             features[layerNum] = self.intermediateFeatures(layerName)
@@ -86,14 +90,14 @@ class intermediateLayers(model.networks):
             if normalizationMode == 'layer':
                 features[layerNum] = 255*(features[layerNum] - layerMin)/(layerMax - layerMin)
             if normalizationMode == 'all':
-                if layerMax > max:
-                    max = layerMax
-                if layerMin < min:
-                    min = layerMin
+                if layerMax > maxValue:
+                    maxValue = layerMax
+                if layerMin < minValue:
+                    minValue = layerMin
             layerNum += 1
         minMax.close()
         if normalizationMode == 'all':
-            features = 255*(features - min)/(max - min)
+            features = 255*(features - minValue)/(maxValue - minValue)
         # resize and save
         resizedDst = np.ndarray((self.imgRows, self.imgCols), dtype = np.uint8)
         layerNum = 0
@@ -110,3 +114,14 @@ class intermediateLayers(model.networks):
                     resizedDst = cv.resize(features[layerNum][0, :, :, feature], (self.imgRows, self.imgCols), resizedDst, 0, 0, cv.INTER_NEAREST)
                     cv.imwrite(layerPath + "/%d"%(feature+1)+".png", resizedDst)
             layerNum += 1
+
+class MemStream(opmap.videoData.VideoData):
+    def __init__(self, srcDir, **videoDataArgs):
+        super(MemStream, self).__init__(**videoDataArgs)
+        fileList = sorted(glob.glob(srcDir+'mem/*.npy'))
+        self.camp = 'grey'
+        i = 0
+        for file in fileList:
+            self.data[i] = np.load(file)
+            i += 1
+        #self.vmin = self.data.
