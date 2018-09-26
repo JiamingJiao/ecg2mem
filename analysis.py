@@ -17,7 +17,8 @@ def calculateMAE(src1, src2):
     difference = np.subtract(src1, src2)
     absDifference = np.abs(difference)
     mae = np.mean(absDifference)
-    return mae
+    std = np.std(difference, ddof=1)
+    return [mae, std]
 
 def histEqualizationArray(src, depth = 8):
     maxIntensity = 2**depth - 1
@@ -115,8 +116,8 @@ class IntermediateLayers(model.Networks):
                     cv.imwrite(layerPath + "/%d"%(feature+1)+".png", resizedDst)
             layerNum += 1
 
-class MemStream(opmap.videoData.VideoData):
-    def __init__(self, srcDir, **videoDataArgs):
+class Phase(opmap.videoData.VideoData):
+    def __init__(self, srcDir, threshold, **videoDataArgs):
         super(MemStream, self).__init__(**videoDataArgs)
         fileList = sorted(glob.glob(srcDir+'mem/*.npy'))
         self.camp = 'grey'
@@ -124,4 +125,19 @@ class MemStream(opmap.videoData.VideoData):
         for file in fileList:
             self.data[i] = np.load(file)
             i += 1
-        #self.vmin = self.data.
+        self.phase = opmap.phaseMap.PhaseMap(src, width=self.data.shape[1])
+        self.phaseVariance = opmap.phaseVarianceMap.PhaseVarianceMap(self.phase)
+        self.phaseVariancePeak = opmap.PhaseVariancePeakMap.PhaseVariancePeakMap(self.phaseVariance, threshold=threshold)
+    
+    def calcCore
+
+'''
+class Phase(object):
+    def __init__(self, srcDir, threshold):
+        src = MemStream(srcDir=srcDir)
+        self.phase = opmap.phaseMap.PhaseMap(src, width=src.data.shape[1])
+        self.phaseVariance = opmap.phaseVarianceMap.PhaseVarianceMap(self.srcPhase)
+        self.phaseVariancePeak = opmap.PhaseVariancePeakMap.PhaseVariancePeakMap(self.phaseVariance, threshold=threshold)
+
+    def calcPhaseSinguilarity(self):
+        '''

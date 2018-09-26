@@ -39,11 +39,16 @@ activationG='relu', lossFuncG='mae', temporalDepth=None, gKernels=64, gKernelSiz
     for name in nameList:
         srcDir = dataDir+name+'/'+dataProc.ECG_FOLDER_NAME+'_%d/'%electrodesNum
         rawEcg = dataProc.loadData(srcDir=srcDir, resize=True, srcSize=rawSize, dstSize=imgSize, normalization=False)
-        ecg = dataProc.create3dEcg(rawEcg, temporalDepth, netGName)
+        if netGName == 'uNet':
+            ecg = rawEcg
+        else:
+            ecg = dataProc.create3dEcg(rawEcg, temporalDepth, netGName)
         ecg = dataProc.scale(ecg, priorEcgRange, dataProc.NORM_RANGE)
         mem = netG.predict(ecg, batch_size=batchSize, verbose=1)
         pngMem = mem*255
         mem = dataProc.scale(mem, dataProc.NORM_RANGE, priorMemRange)
+        if not os.path.exists(dstDir):
+            os.mkdir(dstDir)
         memDir = dstDir+name+'/'
         if not os.path.exists(memDir):
             os.mkdir(memDir)
@@ -56,4 +61,5 @@ activationG='relu', lossFuncG='mae', temporalDepth=None, gKernels=64, gKernelSiz
         for i in range (0, mem.shape[0]):
             resizedMem = cv.resize(mem[i], rawSize)
             np.save(npyDir+'%06d.npy'%i, resizedMem)
-            cv.imwrite(pngDir+'%06d.png'%i, pngMem[i])
+            resizedPng = cv.resize(pngMem[i], rawSize)
+            cv.imwrite(pngDir+'%06d.png'%i, resizedPng)

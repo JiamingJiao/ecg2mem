@@ -12,7 +12,7 @@ import random
 DATA_TYPE = np.float32
 INTERPOLATION_METHOD = cv.INTER_NEAREST # Use nearest interpolation if it is the last step, otherwise use cubic
 NORM_RANGE = (0, 1)
-
+VIDEO_ENCODER = 'H264'
 VIDEO_FPS = 50
 IMG_SIZE = (200, 200)
 PSEUDO_ECG_CONV_KERNEL = np.zeros((3, 3, 1), dtype=DATA_TYPE)
@@ -136,7 +136,7 @@ def create3dEcg(src, temporalDepth, netGName):
     elif netGName == 'uNet3d':
         framesNum = src.shape[0] - 2*math.floor(temporalDepth/2 + 0.1)
     dst = np.zeros((framesNum, temporalDepth, src.shape[1], src.shape[2], src.shape[3]), dtype=DATA_TYPE)
-    for i in range(0, framesNum-temporalDepth+1):
+    for i in range(0, framesNum+1):
         dst[i] = src[i:i+temporalDepth]
     return dst
 
@@ -202,9 +202,11 @@ def scale(src, priorRange=None, dstRange=(0, 1)):
     dst = dstRange[0] + ((src-priorRange[0])*(dstRange[1]-dstRange[0])) / (priorRange[1]-priorRange[0])
     return dst
 
-def makeVideo(srcDir, dstPath):
-    srcPathList = sorted(glob.glob(srcDir+'*png'))
-    writer = cv.VideoWriter(filename=dstPath, fourcc=cv.VideoWriter_fourcc(*'XVID'), fps=VIDEO_FPS, frameSize=IMG_SIZE, isColor=False)
+def makeVideo(srcDir, dstPath, frameRange=(-1, -1)):
+    srcPathList = sorted(glob.glob(srcDir+'*.png'))
+    if not frameRange[0] == -1:
+        srcPathList = srcPathList[frameRange[0] : frameRange[1]+1]
+    writer = cv.VideoWriter(filename=dstPath, fourcc=cv.VideoWriter_fourcc(*VIDEO_ENCODER), fps=VIDEO_FPS, frameSize=IMG_SIZE, isColor=False)
     for i in srcPathList:
         src = cv.imread(i, -1)
         writer.write(src)
