@@ -98,7 +98,7 @@ def npyToPng(srcDir, dstDir):
         cv.imwrite(dstDir + "%06d"%i+".png", src[i, :, :])
     print('convert .npy to .png completed')
 
-def loadData(srcDir, resize=False, srcSize=(200, 200), dstSize=(256, 256), normalization=False, normalizationRange=NORM_RANGE):
+def loadData(srcDir, resize=False, srcSize=(200, 200), dstSize=(256, 256), normalization=False, normalizationRange=NORM_RANGE, addChannel=True):
     srcPathList = sorted(glob.glob(srcDir + '*.npy'))
     lowerBound = normalizationRange[0]
     upperBound = normalizationRange[1]
@@ -118,7 +118,8 @@ def loadData(srcDir, resize=False, srcSize=(200, 200), dstSize=(256, 256), norma
         minValue = np.amin(dst)
         maxValue = np.amax(dst)
         dst = lowerBound + ((dst-minValue)*(upperBound-lowerBound))/(maxValue-minValue)
-    dst = dst.reshape((dst.shape[0], dst.shape[1], dst.shape[2], 1))
+    if addChannel == True:
+        dst = dst.reshape((dst.shape[0], dst.shape[1], dst.shape[2], 1))
     return dst
 
 def create3dSequence(srcEcg, srcMem, temporalDepth, netGName):

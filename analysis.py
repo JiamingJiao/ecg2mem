@@ -8,7 +8,10 @@ import os
 import glob
 import keras.backend as K
 
-import opmap
+import opmap.videoData
+import opmap.phaseMap
+import opmap.phaseVarianceMap
+import opmap.PhaseVariancePeakMap
 
 import dataProc
 import model
@@ -116,28 +119,28 @@ class IntermediateLayers(model.Networks):
                     cv.imwrite(layerPath + "/%d"%(feature+1)+".png", resizedDst)
             layerNum += 1
 
-class Phase(opmap.videoData.VideoData):
+class MemStream(opmap.videoData.VideoData):
     def __init__(self, srcDir, threshold, **videoDataArgs):
-        super(MemStream, self).__init__(**videoDataArgs)
-        fileList = sorted(glob.glob(srcDir+'mem/*.npy'))
+        tempData = dataProc.loadData(srcDir, addChannel=False)
+        print(tempData.shape)
+        super(MemStream, self).__init__(length=tempData.shape[0], height=tempData.shape[1], width=tempData.shape[2], **videoDataArgs)
+        #fileList = sorted(glob.glob(srcDir+'mem/*.npy'))
         self.camp = 'grey'
-        i = 0
-        for file in fileList:
-            self.data[i] = np.load(file)
-            i += 1
-        self.phase = opmap.phaseMap.PhaseMap(src, width=self.data.shape[1])
+        self.data = tempData
+        '''
+        self.phase = opmap.phaseMap.PhaseMap(self.data, width=self.data.shape[1])
         self.phaseVariance = opmap.phaseVarianceMap.PhaseVarianceMap(self.phase)
         self.phaseVariancePeak = opmap.PhaseVariancePeakMap.PhaseVariancePeakMap(self.phaseVariance, threshold=threshold)
-    
-    def calcCore
+        '''
 
-'''
+
 class Phase(object):
     def __init__(self, srcDir, threshold):
-        src = MemStream(srcDir=srcDir)
+        src = MemStream(srcDir=srcDir, threshold=threshold)
+        print('data loaded')
         self.phase = opmap.phaseMap.PhaseMap(src, width=src.data.shape[1])
-        self.phaseVariance = opmap.phaseVarianceMap.PhaseVarianceMap(self.srcPhase)
+        print('phase')
+        self.phaseVariance = opmap.phaseVarianceMap.PhaseVarianceMap(self.phase)
+        print('pv')
         self.phaseVariancePeak = opmap.PhaseVariancePeakMap.PhaseVariancePeakMap(self.phaseVariance, threshold=threshold)
-
-    def calcPhaseSinguilarity(self):
-        '''
+        print('pvp')
