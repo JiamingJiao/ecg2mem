@@ -6,6 +6,7 @@ import numpy as np
 import math
 import os
 import glob
+import matplotlib.pyplot as plt
 import keras.backend as K
 
 import opmap.videoData
@@ -16,7 +17,9 @@ import opmap.PhaseVariancePeakMap
 import dataProc
 import model
 
-def calculateMAE(src1, src2):
+BLUE = '#0070c1'
+
+def calculateMae(src1, src2):
     difference = np.subtract(src1, src2)
     absDifference = np.abs(difference)
     mae = np.mean(absDifference)
@@ -29,7 +32,7 @@ def histEqualizationArray(src, depth = 8):
     dst = np.zeros((maxIntensity+1), dtype = np.float64)
     pixNum = src.shape[0]*src.shape[1]
     histogram = cv.calcHist([src], [0], None, [maxIntensity+1], [0, maxIntensity+1])
-    hitogram = histogram.astype(np.float64)
+    histogram = histogram.astype(np.float64)
     for i in range(0, maxIntensity+1):
         dst[i] = temp + maxIntensity*histogram[i]/(pixNum)
         temp = dst[i]
@@ -54,6 +57,22 @@ def histSpecification(src, transArray):
         for j in range(0, src.shape[1]):
             dst[i, j] = transArray[src[i, j]]
     return dst
+
+def plotEcg(srcDir, dstDir, coordinate=(100, 100), yrange=(-100, 0), xlabel=('Time / ms'), ylabel=('Membrane potential / mV')):
+    src = dataProc.loadData(srcDir)
+    ecg = src[:, coordinate[0], coordinate[1], :]
+    y = ecg.flatten()
+    length = y.shape[0]
+    x = np.linspace(1, length, num=length)
+    figure = plt.figure(figsize=(8, 3), dpi=300)
+    plt.plot(x, y, linewidth=1, color=BLUE, figure=figure)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.ylim(yrange)
+    plt.show()
+    if not os.path.exists(dstDir):
+        os.mkdir(dstDir)
+    figure.savefig(dstDir+'%d_%d.png'%coordinate, bbox_inches='tight')
 
 class IntermediateLayers(model.Networks):
     def __init__(self, src, netName = 'uNet', weightsPath = None, **kwargs):
@@ -133,12 +152,11 @@ class MemStream(opmap.videoData.VideoData):
         self.phaseVariancePeak = opmap.PhaseVariancePeakMap.PhaseVariancePeakMap(self.phaseVariance, threshold=threshold)
         '''
 
-
 class Phase(object):
-    def __init__(self, srcDir, threshold):
+    def __init__(self, srcDir, spatialSigma=32, temporalSigma=5, threshold=0.8):
         src = MemStream(srcDir=srcDir, threshold=threshold)
         print('data loaded')
-        self.phase = opmap.phaseMap.PhaseMap(src, width=src.data.shape[1])
+        self.phase = opmap.phaseMap.PhaseMap(src, width=src.data.shape[1], sigma_mean=spatialSigma, sigma_t=temporalSigma)
         print('phase')
         self.phaseVariance = opmap.phaseVarianceMap.PhaseVarianceMap(self.phase)
         print('pv')

@@ -137,7 +137,7 @@ def create3dEcg(src, temporalDepth, netGName):
     elif netGName == 'uNet3d':
         framesNum = src.shape[0] - 2*math.floor(temporalDepth/2 + 0.1)
     dst = np.zeros((framesNum, temporalDepth, src.shape[1], src.shape[2], src.shape[3]), dtype=DATA_TYPE)
-    for i in range(0, framesNum+1):
+    for i in range(0, framesNum):
         dst[i] = src[i:i+temporalDepth]
     return dst
 
