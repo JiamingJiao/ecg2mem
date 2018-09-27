@@ -58,17 +58,21 @@ def histSpecification(src, transArray):
             dst[i, j] = transArray[src[i, j]]
     return dst
 
-def plotEcg(srcDir, dstDir, coordinate=(100, 100), yrange=(-100, 0), xlabel=('Time / ms'), ylabel=('Membrane potential / mV')):
+def plotEcg(srcDir, dstDir, coordinate=(100, 100), xrange=(-1, -1), ylimit=(-100, 0), xlabel=('Time / ms'), ylabel=('Membrane potential / mV')):
     src = dataProc.loadData(srcDir)
     ecg = src[:, coordinate[0], coordinate[1], :]
     y = ecg.flatten()
+    if not xrange[0] == -1:
+        y = y[xrange[0]:]
+    if not xrange[1] == -1:
+        y = y[:xrange[1]-xrange[0]]
     length = y.shape[0]
     x = np.linspace(1, length, num=length)
-    figure = plt.figure(figsize=(8, 3), dpi=300)
+    figure = plt.figure(figsize=(9, 3), dpi=300)
     plt.plot(x, y, linewidth=1, color=BLUE, figure=figure)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
-    plt.ylim(yrange)
+    plt.ylim(ylimit)
     plt.show()
     if not os.path.exists(dstDir):
         os.mkdir(dstDir)

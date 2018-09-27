@@ -206,7 +206,9 @@ def scale(src, priorRange=None, dstRange=(0, 1)):
 def makeVideo(srcDir, dstPath, frameRange=(-1, -1)):
     srcPathList = sorted(glob.glob(srcDir+'*.png'))
     if not frameRange[0] == -1:
-        srcPathList = srcPathList[frameRange[0] : frameRange[1]+1]
+        srcPathList = srcPathList[frameRange[0]:]
+    if not frameRange[1] == -1:
+        srcPathList = srcPathList[:frameRange[1]-frameRange[0]]
     writer = cv.VideoWriter(filename=dstPath, fourcc=cv.VideoWriter_fourcc(*VIDEO_ENCODER), fps=VIDEO_FPS, frameSize=IMG_SIZE, isColor=False)
     for i in srcPathList:
         src = cv.imread(i, -1)
