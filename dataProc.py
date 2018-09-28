@@ -203,15 +203,20 @@ def scale(src, priorRange=None, dstRange=(0, 1)):
     dst = dstRange[0] + ((src-priorRange[0])*(dstRange[1]-dstRange[0])) / (priorRange[1]-priorRange[0])
     return dst
 
-def makeVideo(srcDir, dstPath, frameRange=(-1, -1)):
+def makeVideo(srcDir, dstPath, frameRange=(-1, -1), padding=(0, 0)):
     srcPathList = sorted(glob.glob(srcDir+'*.png'))
     if not frameRange[0] == -1:
         srcPathList = srcPathList[frameRange[0]:]
     if not frameRange[1] == -1:
         srcPathList = srcPathList[:frameRange[1]-frameRange[0]]
+    sample = cv.imread(srcPathList[0], -1)
+    paddingArray = np.zeros_like(sample)
     writer = cv.VideoWriter(filename=dstPath, fourcc=cv.VideoWriter_fourcc(*VIDEO_ENCODER), fps=VIDEO_FPS, frameSize=IMG_SIZE, isColor=False)
+    for i in range(0, padding[0]):
+        writer.write(paddingArray)
     for i in srcPathList:
         src = cv.imread(i, -1)
         writer.write(src)
+    for i in range(0, padding[1]):
+        writer.write(paddingArray)
     writer.release
-    
