@@ -9,6 +9,8 @@ import shutil
 import math
 import random
 
+import time
+
 DATA_TYPE = np.float32
 INTERPOLATION_METHOD = cv.INTER_NEAREST # Use nearest interpolation if it is the last step, otherwise use cubic
 NORM_RANGE = (0, 1)
@@ -41,19 +43,7 @@ class Calculation(object):
                 self.dst[row,col] = cv.sumElems(cv.divide(diffV, distance))[0]
         return self.dst
 
-    def downSample(self, src, samplePoints=(20, 20)):
-        rowStride = math.floor(src.shape[0]/samplePoints[0])
-        colStride = math.floor(src.shape[1]/samplePoints[1])
-        multipleOfStride = ((samplePoints[0]-1)*rowStride+1, (samplePoints[1]-1)*colStride+1)
-        resized = cv.resize(src, multipleOfStride)
-        sample = np.ndarray(samplePoints, dtype=DATA_TYPE)
-        for row in range(0, samplePoints[0]):
-            for col in range(0, samplePoints[1]):
-                sample[row, col] = resized[row*rowStride, col*colStride]
-        self.dst = cv.resize(sample, src.shape, self.dst, 0, 0, INTERPOLATION_METHOD)
-        return self.dst
-
-    def calcSparsePseudoEcg(self, src, samplePoints = (20, 20)):
+    def calcAverageSparsePseudoEcg(self, src, samplePoints = (20, 20)):
         rowStride = math.floor(src.shape[0]/samplePoints[0])
         colStride = math.floor(src.shape[1]/samplePoints[1])
         multipleOfStride = ((samplePoints[0]-1)*rowStride+1, (samplePoints[1]-1)*colStride+1)
@@ -69,13 +59,41 @@ class Calculation(object):
         for row in range(0, samplePoints[0]):
             for col in range(0, samplePoints[1]):
                 distance = cv.magnitude((rowIndex - row*rowStride), (colIndex - col*colStride))
-                distance = distance.astype(DATA_TYPE)
                 pseudoEcg[row, col] = cv.sumElems(cv.divide(diffV, distance))[0]
         self.dst = cv.resize(pseudoEcg, (src.shape[0], src.shape[1]), self.dst, 0, 0, INTERPOLATION_METHOD)
         return self.dst
 
-    def clipData(self, src, bounds=(0, 1)):
-        self.dst = np.clip(src, bounds[0], bounds[1])
+    def calcSparsePseudoEcg(self, src, coordinates):
+        diffV = np.ndarray(src.shape, dtype=DATA_TYPE)
+        diffV = cv.filter2D(src=src, ddepth=-1, kernel=PSEUDO_ECG_CONV_KERNEL, dst=diffV, anchor=(-1, -1), delta=0, borderType=cv.BORDER_REPLICATE)
+        diffV = diffV.astype(DATA_TYPE)
+        firstRowIndex = np.linspace(0, src.shape[0], num=src.shape[0], endpoint=False, dtype=DATA_TYPE)
+        firstColIndex = np.linspace(0, src.shape[1], num=src.shape[1], endpoint=False, dtype=DATA_TYPE)
+        colIndex, rowIndex = np.meshgrid(firstRowIndex, firstColIndex)
+        distance = np.ndarray(src.shape, dtype=DATA_TYPE)
+        pseudoEcg = np.ndarray(src.shape, dtype=DATA_TYPE)
+        for coordinate in coordinates:
+            distance = cv.magnitude((rowIndex - coordinate[0]), (colIndex - coordinate[1]))
+            pseudoEcg[coordinate[0], coordinate[1]] = cv.sumElems(cv.divide(diffV, distance))[0]
+        return pseudoEcg
+
+    def randomCoordinates(self, pointsNum, limit):
+        sampledPoints = random.sample(range(0, limit[0]*limit[1]), pointsNum)
+        dst = np.ndarray((pointsNum, 2), dtype=np.uint16)
+        dst[:,0], dst[:,1] = np.divmod(sampledPoints, limit[1])
+        print(dst.dtype)
+        return dst
+
+    def downSample(self, src, samplePoints=(20, 20)):
+        rowStride = math.floor(src.shape[0]/samplePoints[0])
+        colStride = math.floor(src.shape[1]/samplePoints[1])
+        multipleOfStride = ((samplePoints[0]-1)*rowStride+1, (samplePoints[1]-1)*colStride+1)
+        resized = cv.resize(src, multipleOfStride)
+        sample = np.ndarray(samplePoints, dtype=DATA_TYPE)
+        for row in range(0, samplePoints[0]):
+            for col in range(0, samplePoints[1]):
+                sample[row, col] = resized[row*rowStride, col*colStride]
+        self.dst = cv.resize(sample, src.shape, self.dst, 0, 0, INTERPOLATION_METHOD)
         return self.dst
 
 def callCalc(srcDir, dstDir, methodName, **kwargs):
@@ -89,6 +107,10 @@ def callCalc(srcDir, dstDir, methodName, **kwargs):
         dst = method(src=src[i], **kwargs)
         np.save(dstDir + '%06d'%i, dst)
     print('%s completed'%methodName)
+
+def clipData(src, bounds=(0, 1)):
+    dst = np.clip(src, bounds[0], bounds[1])
+    return dst
 
 def npyToPng(srcDir, dstDir):
     if not os.path.exists(dstDir):
@@ -107,6 +129,7 @@ def loadData(srcDir, resize=False, srcSize=(200, 200), dstSize=(256, 256), norma
     dst = np.ndarray((len(srcPathList), dstSize[0], dstSize[1]), dtype=DATA_TYPE)
     src = np.ndarray(srcSize, dtype=DATA_TYPE)
     index = 0
+    sample = np.load(srcPathList[0])
     for srcPath in srcPathList:
         src = np.load(srcPath)
         if resize == True:
