@@ -8,10 +8,12 @@ import os
 import shutil
 import math
 import random
+import scipy.interpolate
 
 import time
 
 DATA_TYPE = np.float32
+CV_DATA_TYPE = cv.CV_32F
 INTERPOLATION_METHOD = cv.INTER_NEAREST # Use nearest interpolation if it is the last step, otherwise use cubic
 NORM_RANGE = (0, 1)
 VIDEO_ENCODER = 'H264'
@@ -24,89 +26,82 @@ PSEUDO_ECG_CONV_KERNEL[1, 1, 0] = -4
 ECG_FOLDER_NAME = 'pseudo_ecg'
 MEM_FOLDER_NAME = 'mem'
 
-class Calculation(object):
-    def __init__(self, dst=None, shape=None):
-        self.dst = dst
-        if not type(self.dst) is np.ndarray:
-            self.dst = np.ndarray(shape, dtype=DATA_TYPE)
-
-    def calcPseudoEcg(self, src): # src: extra cellular potential map, dst: pseudo-ECG map
-        diffV = np.ndarray(src.shape, dtype=DATA_TYPE)
-        diffV = cv.filter2D(src=src, ddepth =-1, kernel=PSEUDO_ECG_CONV_KERNEL, dst=diffV, anchor=(-1, -1), delta=0, borderType=cv.BORDER_REPLICATE)
-        distance = np.ndarray(src.shape, dtype=DATA_TYPE)
-        firstRowIndex = np.linspace(0, src.shape[0], num=src.shape[1], endpoint=False)
-        firstColIndex = np.linspace(0, src.shape[1], num=src.shape[1], endpoint=False)
+class SparsePecg(object):
+    def __init__(self, shape, coordinates):
+        self.coordinates = coordinates
+        self.shape = shape
+        firstRowIndex = np.linspace(0, self.shape[0], num=self.shape[0], endpoint=False, dtype=DATA_TYPE)
+        firstColIndex = np.linspace(0, self.shape[1], num=self.shape[1], endpoint=False, dtype=DATA_TYPE)
         colIndex, rowIndex = np.meshgrid(firstRowIndex, firstColIndex)
-        for row in range(0, src.shape[0]):
-            for col in range(0, src.shape[1]):
-                distance = cv.magnitude((rowIndex-row), (colIndex-col))
-                self.dst[row,col] = cv.sumElems(cv.divide(diffV, distance))[0]
-        return self.dst
+        self.grid = (rowIndex, colIndex)
+        self.distance = np.ndarray(((coordinates.shape[0],) + self.shape), dtype=DATA_TYPE)
+        for i in range(0, coordinates.shape[0]):
+            cv.magnitude((rowIndex - coordinates[i, 0]), (colIndex - coordinates[i, 1]), self.distance[i])
+        self.pseudoEcg = np.ndarray(coordinates.shape[0], dtype=DATA_TYPE)
+        self.diffV = np.ndarray(self.shape, dtype=DATA_TYPE)
+        self.quotient = np.ndarray(self.shape, dtype=DATA_TYPE)
+        self.dst = np.ndarray(self.shape, dtype=DATA_TYPE)
 
-    def calcAverageSparsePseudoEcg(self, src, samplePoints = (20, 20)):
-        rowStride = math.floor(src.shape[0]/samplePoints[0])
-        colStride = math.floor(src.shape[1]/samplePoints[1])
-        multipleOfStride = ((samplePoints[0]-1)*rowStride+1, (samplePoints[1]-1)*colStride+1)
-        resized = np.ndarray(multipleOfStride, dtype=DATA_TYPE) #Its size is a multiple of stride
-        diffV = np.ndarray(multipleOfStride, dtype=DATA_TYPE)
-        firstRowIndex = np.linspace(0, resized.shape[0], num=resized.shape[0], endpoint=False)
-        firstColIndex = np.linspace(0, resized.shape[1], num=resized.shape[1], endpoint=False)
+    def calcPecg(self, src):
+        cv.filter2D(src=src, ddepth=CV_DATA_TYPE, kernel=PSEUDO_ECG_CONV_KERNEL, dst=self.diffV, anchor=(-1, -1), delta=0, borderType=cv.BORDER_REPLICATE)
+        for i in range(0, self.coordinates.shape[0]):
+            cv.divide(self.diffV, self.distance[i], dst=self.quotient)
+            self.pseudoEcg[i] = cv.sumElems(self.quotient)[0]
+        self.dst = scipy.interpolate.griddata(self.coordinates, self.pseudoEcg, self.grid, method='nearest')
+
+    def callCalc(self, srcDir, dstDir, dataNameList):
+        for name in dataNameList:
+            srcPath = srcDir + name + '/phie_'
+            src = loadData(srcPath)
+            dstPath = dstDir + name + '/' + ECG_FOLDER_NAME + '_random_%d/'%self.coordinates.shape[0]
+            if not os.path.exists(dstPath):
+                os.mkdir(dstPath)
+            for i in range(0, src.shape[0]):
+                self.calcPecg(src[i])
+                np.save(dstPath+'%06d'%i, self.dst)
+            print('%s completed'%name)
+
+class AccurateUniformSparsePecg(object):
+    def __init__(self, shape, samplePoints):
+        rowStride = math.floor(shape[0]/samplePoints[0])
+        colStride = math.floor(shape[1]/samplePoints[1])
+        self.multipleOfStride = ((samplePoints[0]-1)*rowStride+1, (samplePoints[1]-1)*colStride+1)
+        self.resized = np.ndarray(self.multipleOfStride, dtype=DATA_TYPE) #Its size is a multiple of stride
+        self.diffV = np.ndarray(self.resized.shape, dtype=DATA_TYPE)
+        firstRowIndex = np.linspace(0, self.resized.shape[0], num=self.resized.shape[0], endpoint=False, dtype=DATA_TYPE)
+        firstColIndex = np.linspace(0, self.resized.shape[1], num=self.resized.shape[1], endpoint=False, dtype=DATA_TYPE)
         colIndex, rowIndex = np.meshgrid(firstRowIndex, firstColIndex)
-        distance = np.ndarray(multipleOfStride, dtype=DATA_TYPE)
-        pseudoEcg = np.ndarray(samplePoints, dtype=DATA_TYPE)
-        resized = cv.resize(src, multipleOfStride, resized, 0, 0, cv.INTER_CUBIC)
-        diffV = cv.filter2D(src=resized, ddepth=-1, kernel=PSEUDO_ECG_CONV_KERNEL, dst=diffV, anchor=(-1, -1), delta=0, borderType=cv.BORDER_REPLICATE)
+        self.distance = np.ndarray((samplePoints + self.resized.shape), dtype=DATA_TYPE)
+        self.quotient = np.ndarray(self.resized.shape, dtype=DATA_TYPE)
         for row in range(0, samplePoints[0]):
             for col in range(0, samplePoints[1]):
-                distance = cv.magnitude((rowIndex - row*rowStride), (colIndex - col*colStride))
-                pseudoEcg[row, col] = cv.sumElems(cv.divide(diffV, distance))[0]
-        self.dst = cv.resize(pseudoEcg, (src.shape[0], src.shape[1]), self.dst, 0, 0, INTERPOLATION_METHOD)
-        return self.dst
+                cv.magnitude((rowIndex - row*rowStride), (colIndex - col*colStride), self.distance[row, col])
+        self.pseudoEcg = np.ndarray(samplePoints, dtype=DATA_TYPE)
+        self.dst = np.ndarray((shape), dtype=DATA_TYPE)
 
-    def calcSparsePseudoEcg(self, src, coordinates):
-        diffV = np.ndarray(src.shape, dtype=DATA_TYPE)
-        diffV = cv.filter2D(src=src, ddepth=-1, kernel=PSEUDO_ECG_CONV_KERNEL, dst=diffV, anchor=(-1, -1), delta=0, borderType=cv.BORDER_REPLICATE)
-        diffV = diffV.astype(DATA_TYPE)
-        firstRowIndex = np.linspace(0, src.shape[0], num=src.shape[0], endpoint=False, dtype=DATA_TYPE)
-        firstColIndex = np.linspace(0, src.shape[1], num=src.shape[1], endpoint=False, dtype=DATA_TYPE)
-        colIndex, rowIndex = np.meshgrid(firstRowIndex, firstColIndex)
-        distance = np.ndarray(src.shape, dtype=DATA_TYPE)
-        pseudoEcg = np.ndarray(src.shape, dtype=DATA_TYPE)
-        for coordinate in coordinates:
-            distance = cv.magnitude((rowIndex - coordinate[0]), (colIndex - coordinate[1]))
-            pseudoEcg[coordinate[0], coordinate[1]] = cv.sumElems(cv.divide(diffV, distance))[0]
-        return pseudoEcg
-
-    def randomCoordinates(self, pointsNum, limit):
-        sampledPoints = random.sample(range(0, limit[0]*limit[1]), pointsNum)
-        dst = np.ndarray((pointsNum, 2), dtype=np.uint16)
-        dst[:,0], dst[:,1] = np.divmod(sampledPoints, limit[1])
-        print(dst.dtype)
-        return dst
-
-    def downSample(self, src, samplePoints=(20, 20)):
-        rowStride = math.floor(src.shape[0]/samplePoints[0])
-        colStride = math.floor(src.shape[1]/samplePoints[1])
-        multipleOfStride = ((samplePoints[0]-1)*rowStride+1, (samplePoints[1]-1)*colStride+1)
-        resized = cv.resize(src, multipleOfStride)
-        sample = np.ndarray(samplePoints, dtype=DATA_TYPE)
+    def calcPecg(self, src, samplePoints = (20, 20)):
+        cv.resize(src=src, dsize=self.multipleOfStride, dst=self.resized, fx=0, fy=0, interpolation=cv.INTER_CUBIC)
+        cv.filter2D(src=self.resized, ddepth=CV_DATA_TYPE, kernel=PSEUDO_ECG_CONV_KERNEL, dst=self.diffV, anchor=(-1, -1), delta=0, borderType=cv.BORDER_REPLICATE)
         for row in range(0, samplePoints[0]):
             for col in range(0, samplePoints[1]):
-                sample[row, col] = resized[row*rowStride, col*colStride]
-        self.dst = cv.resize(sample, src.shape, self.dst, 0, 0, INTERPOLATION_METHOD)
-        return self.dst
+                cv.divide(self.diffV, self.distance[row, col], dst=self.quotient)
+                self.pseudoEcg[row, col] = cv.sumElems(self.quotient)[0]
+        cv.resize(self.pseudoEcg, (src.shape[0], src.shape[1]), self.dst, 0, 0, INTERPOLATION_METHOD)
 
-def callCalc(srcDir, dstDir, methodName, **kwargs):
-    if not os.path.exists(dstDir):
-        os.makedirs(dstDir)
-    src = loadData(srcDir)
-    dst = np.ndarray(src[0].shape, dtype=DATA_TYPE)
-    calc = Calculation(dst=dst)
-    method = getattr(calc, methodName)
-    for i in range(0, src.shape[0]):
-        dst = method(src=src[i], **kwargs)
-        np.save(dstDir + '%06d'%i, dst)
-    print('%s completed'%methodName)
+def randomCoordinates(pointsNum, limit):
+    sampledPoints = random.sample(range(0, limit[0]*limit[1]), pointsNum)
+    dst = np.ndarray((pointsNum, 2), dtype=np.uint16)
+    dst[:,0], dst[:,1] = np.divmod(sampledPoints, limit[1])
+    return dst
+
+def uniformCoordinates(shape, limit):
+    firstRowIndex = np.linspace(0, limit[0]-1, num=shape[0], dtype=DATA_TYPE)
+    firstColIndex = np.linspace(0, limit[1]-1, num=shape[1], dtype=DATA_TYPE)
+    colIndex, rowIndex = np.meshgrid(firstRowIndex, firstColIndex)
+    dst = np.ndarray((shape[0]*shape[1], 2), dtype=np.uint16)
+    dst[:,0] = rowIndex.flatten()
+    dst[:,1] = colIndex.flatten()
+    return dst
 
 def clipData(src, bounds=(0, 1)):
     dst = np.clip(src, bounds[0], bounds[1])
@@ -129,7 +124,6 @@ def loadData(srcDir, resize=False, srcSize=(200, 200), dstSize=(256, 256), norma
     dst = np.ndarray((len(srcPathList), dstSize[0], dstSize[1]), dtype=DATA_TYPE)
     src = np.ndarray(srcSize, dtype=DATA_TYPE)
     index = 0
-    sample = np.load(srcPathList[0])
     for srcPath in srcPathList:
         src = np.load(srcPath)
         if resize == True:
