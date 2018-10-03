@@ -122,14 +122,18 @@ def npyToPng(srcDir, dstDir):
         cv.imwrite(dstDir + "%06d"%i+".png", src[i, :, :])
     print('convert .npy to .png completed')
 
-def loadData(srcDir, resize=False, srcSize=(200, 200), dstSize=(256, 256), normalization=False, normalizationRange=NORM_RANGE, addChannel=True):
+def loadData(srcDir, resize=False, dstSize=(256, 256), normalization=False, normalizationRange=NORM_RANGE, addChannel=True):
     srcPathList = sorted(glob.glob(srcDir + '*.npy'))
     lowerBound = normalizationRange[0]
     upperBound = normalizationRange[1]
+    sample = np.load(srcPathList[0])
     if resize == False:
-        dstSize = srcSize
-    dst = np.ndarray((len(srcPathList), dstSize[0], dstSize[1]), dtype=DATA_TYPE)
-    src = np.ndarray(srcSize, dtype=DATA_TYPE)
+        dstSize = (sample.shape[0], sample.shape[1])
+    if sample.ndim == 2:
+        dst = np.ndarray(((len(srcPathList),)+dstSize), dtype=DATA_TYPE)
+    elif sample.ndim == 3:
+        dst = np.ndarray(((len(srcPathList),)+sample.shape), dtype=DATA_TYPE)
+    src = np.ndarray(sample.shape, dtype=DATA_TYPE)
     index = 0
     for srcPath in srcPathList:
         src = np.load(srcPath)
@@ -142,7 +146,7 @@ def loadData(srcDir, resize=False, srcSize=(200, 200), dstSize=(256, 256), norma
         minValue = np.amin(dst)
         maxValue = np.amax(dst)
         dst = lowerBound + ((dst-minValue)*(upperBound-lowerBound))/(maxValue-minValue)
-    if addChannel == True:
+    if sample.ndim==2 and addChannel==True:
         dst = dst.reshape((dst.shape[0], dst.shape[1], dst.shape[2], 1))
     return dst
 
@@ -170,8 +174,8 @@ def mergeSequence(pecgDirList, memDirList, temporalDepth, netGName=None, srcSize
     ecgList = np.empty(length, dtype=object)
     memList = np.empty(length, dtype=object)
     for i in range(0, length):
-        srcEcg = loadData(srcDir=pecgDirList[i], resize=True, srcSize=srcSize, dstSize=dstSize, normalization=False)
-        srcMem = loadData(srcDir=memDirList[i], resize=True, srcSize=srcSize, dstSize=dstSize, normalization=False)
+        srcEcg = loadData(srcDir=pecgDirList[i], resize=True, dstSize=dstSize, normalization=False)
+        srcMem = loadData(srcDir=memDirList[i], resize=True, dstSize=dstSize, normalization=False)
         if netGName=='convLstm' or netGName=='uNet3d':
             ecgList[i], memList[i] = create3dSequence(srcEcg, srcMem, temporalDepth, netGName)
         if netGName=='uNet':

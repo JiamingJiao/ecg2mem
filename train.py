@@ -99,7 +99,7 @@ activationG='relu', lossFuncG='mae', temporalDepth=None, gKernels=64, gKernelSiz
     netG.load_weights(modelDir)
     length = len(pecgDirList)
     for i in range(0, length):
-        rawEcg = dataProc.loadData(srcDir=pecgDirList[i], resize=True, srcSize=rawSize, dstSize=imgSize, normalization=False)
+        rawEcg = dataProc.loadData(srcDir=pecgDirList[i], resize=True, dstSize=imgSize, normalization=False)
         if netGName == 'uNet':
             ecg = rawEcg
         else:
