@@ -24,7 +24,6 @@ PSEUDO_ECG_CONV_KERNEL[1, :, 0] = 1
 PSEUDO_ECG_CONV_KERNEL[:, 1, 0] = 1
 PSEUDO_ECG_CONV_KERNEL[1, 1, 0] = -4
 ECG_FOLDER_NAME = 'pseudo_ecg'
-MEM_FOLDER_NAME = 'mem'
 
 class SparsePecg(object):
     def __init__(self, shape, coordinates):
@@ -49,17 +48,18 @@ class SparsePecg(object):
             self.pseudoEcg[i] = cv.sumElems(self.quotient)[0]
         self.dst = scipy.interpolate.griddata(self.coordinates, self.pseudoEcg, self.grid, method='nearest')
 
-    def callCalc(self, srcDir, dstDir, dataNameList):
-        for name in dataNameList:
-            srcPath = srcDir + name + '/phie_'
+    def callCalc(self, srcDirList, dstDirList):
+        length = len(srcDirList)
+        for i in range(0, length):
+            srcPath = srcDirList[i] + '/phie_'
             src = loadData(srcPath)
-            dstPath = dstDir + name + '/' + ECG_FOLDER_NAME + '_random_%d/'%self.coordinates.shape[0]
+            dstPath = dstDirList[i]
             if not os.path.exists(dstPath):
                 os.mkdir(dstPath)
             for i in range(0, src.shape[0]):
                 self.calcPecg(src[i])
                 np.save(dstPath+'%06d'%i, self.dst)
-            print('%s completed'%name)
+            print('%s completed'%dstDirList[i])
 
 class AccurateUniformSparsePecg(object):
     def __init__(self, shape, samplePoints):
@@ -87,6 +87,13 @@ class AccurateUniformSparsePecg(object):
                 cv.divide(self.diffV, self.distance[row, col], dst=self.quotient)
                 self.pseudoEcg[row, col] = cv.sumElems(self.quotient)[0]
         cv.resize(self.pseudoEcg, (src.shape[0], src.shape[1]), self.dst, 0, 0, INTERPOLATION_METHOD)
+
+def createDirList(dataDir, nameList, potentialName):
+    length = len(nameList)
+    dst = [None]*length
+    for i in range(0, length):
+        dst[i] = dataDir + nameList[i] + '/' + potentialName
+    return dst
 
 def randomCoordinates(pointsNum, limit):
     sampledPoints = random.sample(range(0, limit[0]*limit[1]), pointsNum)
@@ -158,19 +165,18 @@ def create3dEcg(src, temporalDepth, netGName):
         dst[i] = src[i:i+temporalDepth]
     return dst
 
-def mergeSequence(srcDirList, electrodesNum, temporalDepth, netGName=None, srcSize=(200, 200), dstSize=(256, 256), normalizationRange=NORM_RANGE):
-    ecgList = np.empty(len(srcDirList), dtype=object)
-    memList = np.empty(len(srcDirList), dtype=object)
-    i = 0
-    for srcDir in srcDirList:
-        srcEcg = loadData(srcDir=srcDir+ECG_FOLDER_NAME+'_%d/'%electrodesNum, resize=True, srcSize=srcSize, dstSize=dstSize, normalization=False)
-        srcMem = loadData(srcDir=srcDir+MEM_FOLDER_NAME+'/', resize=True, srcSize=srcSize, dstSize=dstSize, normalization=False)
+def mergeSequence(pecgDirList, memDirList, temporalDepth, netGName=None, srcSize=(200, 200), dstSize=(256, 256), normalizationRange=NORM_RANGE):
+    length = len(pecgDirList)
+    ecgList = np.empty(length, dtype=object)
+    memList = np.empty(length, dtype=object)
+    for i in range(0, length):
+        srcEcg = loadData(srcDir=pecgDirList[i], resize=True, srcSize=srcSize, dstSize=dstSize, normalization=False)
+        srcMem = loadData(srcDir=memDirList[i], resize=True, srcSize=srcSize, dstSize=dstSize, normalization=False)
         if netGName=='convLstm' or netGName=='uNet3d':
             ecgList[i], memList[i] = create3dSequence(srcEcg, srcMem, temporalDepth, netGName)
         if netGName=='uNet':
             ecgList[i] = srcEcg
             memList[i] = srcMem
-        i += 1
     ecg = np.concatenate(ecgList)
     mem = np.concatenate(memList)
     ecg, minEcg, maxEcg = normalize(ecg, normalizationRange)

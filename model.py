@@ -86,7 +86,7 @@ class Networks(object):
         model = Model(inputs=inputs, outputs=decoder9, name='uNet')
         return model
 
-    def ShallowUnet(self):
+    def shallowUnet(self):
         return 0
 
     def uNet3d(self):
@@ -308,7 +308,7 @@ class Networks(object):
         model = Model(inputs=inputs, outputs=probability, name='VGG16')
         return model
 
-class GAN(object):
+class Gan(object):
     def __init__(self, imgRows=256, imgCols=256, channels=1, netDName=None, netGName=None, temporalDepth=None, gKernels=64, dKernels=64, gKernelSize=4,
     activationG='relu', lossFuncG='mae', gradientPenaltyWeight=10, lossDWeight=0.01, learningRateG=1e-4, learningRateD=1e-4, beta1=0.9, beta2=0.999,
     batchSize=10):
@@ -380,89 +380,6 @@ class GAN(object):
         self.penalizedNetD.summary()
         self.netA.summary()
 
-    # ((number of training samples*validation split ratio)/batch size) should be an integer
-    def trainGAN(self, pEcgDir, memDir, modelDir, epochsNum=100, valSplit=0.2, continueTrain=False, pretrainedGPath=None, pretrainedDPath=None,
-    trainingRatio=5, earlyStoppingPatience=10):
-        if self.activationG == 'tanh':
-            dataRange = [-1., 1.]
-        else:
-            dataRange = [0., 1.]
-        pEcgRaw = dataProc.loadData(srcDir=pEcgDir, resize=1, normalization=1, normalizationRange=dataRange)
-        if self.netGName == 'uNet':
-            pEcgSequence = pEcgRaw.reshape((pEcgRaw.shape[0], self.imgRows, self.imgCols, self.channels))
-        elif self.netGName == 'uNet3d':
-            pEcgSequence = dataProc.create3dSequence(pEcgRaw, temporalDepth = self.temporalDepth)
-            pEcgSequence = pEcgSequence.reshape((pEcgSequence.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels))
-        memRaw = dataProc.loadData(srcDir=memDir, resize=1, normalization=1, normalizationRange=dataRange)
-        memSequence = memRaw.reshape((memRaw.shape[0], self.imgRows, self.imgCols, self.channels))
-        print('traing data loaded')
-
-        trainingDataLength = math.floor((1-valSplit)*memSequence.shape[0]+0.1)
-        lossRecorder = np.ndarray((math.floor(trainingDataLength/self.batchSize + 0.1)*epochsNum, 2), dtype=np.float32)
-        lossCounter = 0
-        minLossG = np.inf
-        weightsDPath = modelDir + 'netD_latest.h5'
-        weightsGPath = modelDir + 'netG_latest.h5'
-        if continueTrain == True:
-            self.netG.load_weights(pretrainedGPath)
-            self.netD.load_weights(pretrainedDPath)
-        labelReal = np.ones((self.batchSize), dtype=np.float32)
-        labelFake = -np.ones((self.batchSize), dtype=np.float32)
-        dummyMem = np.zeros((self.batchSize), dtype=np.float32)
-        earlyStoppingCounter = 0
-        print('begin to train GAN')
-
-        for currentEpoch in range(0, epochsNum):
-            beginingTime = datetime.datetime.now()
-            [pEcgTrain, pEcgVal, memTrain, memVal] = dataProc.splitTrainAndVal(pEcgSequence, memSequence, valSplit)
-            for currentBatch in range(0, trainingDataLength, self.batchSize):
-                pEcgLocal = pEcgTrain[currentBatch:currentBatch+self.batchSize, :]
-                memLocal = memTrain[currentBatch:currentBatch+self.batchSize, :]
-                randomIndexes = np.random.randint(low=0, high=trainingDataLength-self.batchSize-1, size=trainingRatio, dtype=np.int32)
-                for i in range(0, trainingRatio):
-                    pEcgForD = pEcgTrain[randomIndexes[i]:randomIndexes[i]+self.batchSize]
-                    memForD = memTrain[randomIndexes[i]:randomIndexes[i]+self.batchSize]
-                    lossD = self.penalizedNetD.train_on_batch([pEcgForD, memForD], [labelReal, labelFake, dummyMem])
-                lossA = self.netA.train_on_batch(pEcgLocal, [memLocal, labelReal])
-            #validate the model
-            lossVal = self.netG.evaluate(x=pEcgVal, y=memVal, batch_size=self.batchSize, verbose=0)
-            lossRecorder[lossCounter, 0] = lossA[0]
-            lossRecorder[lossCounter, 1] = lossVal[0]
-            lossCounter += 1
-            if (minLossG > lossVal[0]):                
-                self.netG.save_weights(weightsGPath, overwrite=True)
-                self.netD.save_weights(weightsDPath, overwrite=True)
-                minLossG = lossVal[0]
-                earlyStoppingCounter = 0
-            earlyStoppingCounter += 1
-            displayLoss(lossD, lossA, lossVal, beginingTime, currentEpoch+1)
-            if earlyStoppingCounter == earlyStoppingPatience:
-                print('early stopping')
-                break
-        np.save(modelDir + 'loss', lossRecorder)
-        print('training completed')
-
-    def diminishElectrodes(self, extraPathList, memDir, modelDir, epochsNum=100, netGOnlyEpochs=0, valSplit=0.2, continueTrain=False, pretrainedGPath=None, pretrainedDPath=None,
-    trainingRatio=5, earlyStoppingPatience=10):
-        steps = len(extraPathList)
-        if continueTrain == True:
-            self.netG.load_weights(pretrainedGPath)
-            self.netD.load_weights(pretrainedDPath)
-        for i in range(0, steps):
-            currentModelPath = modelDir + 'model_%04d/'%i
-            if not os.path.exists(currentModelPath):
-                os.makedirs(currentModelPath)
-            if i == 0:
-                isFirstStep = True
-                previousGPath = None
-                previousDPath = None
-            else:
-                isFirstStep = False
-                previousGPath = modelDir + 'model_%04d/netG_latest.h5'%(i-1)
-                previousDPath = modelDir + 'model_%04d/netD_latest.h5'%(i-1)
-            self.trainGAN(pEcgDir=extraPathList[i], memDir=memDir, modelDir=currentModelPath, epochsNum=epochsNum, valSplit=valSplit,
-            continueTrain = not isFirstStep, pretrainedGPath=previousGPath, pretrainedDPath=previousDPath, trainingRatio=trainingRatio, earlyStoppingPatience=earlyStoppingPatience)
-
     def randomlyWeightedAverage(self, src):
         weights = K.random_uniform((self.batchSize, 1, 1, 1), minval=0., maxval=1.)
         dst = (weights*src[0]) + ((1-weights)*src[1])
@@ -501,18 +418,3 @@ def calculateGradientPenaltyLoss(true, prediction, samples, weight):
     penalty = weight*K.square(1-gradientsL2Norm)
     averagePenalty = K.mean(penalty, axis = 0)
     return averagePenalty
-
-def displayLoss(lossD, lossA, lossVal, beginingTime, epoch):
-    lossValStr = ' - lossVal: ' + '%.6f'%lossVal[0]
-    lossDStr = ' - lossD: ' + lossD[0].astype(np.str) + ' '
-    lossDOnRealStr = ' - lossD_real: ' + lossD[1].astype(np.str) + ' '
-    lossDOnFakeStr = ' - lossD_fake: ' + lossD[2].astype(np.str) + ' '
-    lossDOnPenalty = ' - penalty: ' + lossD[3].astype(np.str) + ' '
-    lossAStr = ' - lossA: ' + lossA[0].astype(np.str) + ' '
-    lossGStr = ' - lossG: ' + lossA[1].astype(np.str) + ' '
-    lossDInA = ' - lossD: ' + lossA[2].astype(np.str) + ' '
-    endTime = datetime.datetime.now()
-    trainingTime = endTime - beginingTime
-    msg = ' - %d'%trainingTime.total_seconds() + 's' + ' - epoch: ' + '%d '%(epoch) + lossDStr + lossDOnRealStr + lossDOnFakeStr \
-    + lossDOnPenalty + lossAStr + lossGStr + lossDInA + lossValStr
-    print(msg)
