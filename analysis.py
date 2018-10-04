@@ -150,19 +150,10 @@ class MemStream(opmap.videoData.VideoData):
         #fileList = sorted(glob.glob(srcDir+'mem/*.npy'))
         self.camp = 'grey'
         self.data = tempData
-        '''
-        self.phase = opmap.phaseMap.PhaseMap(self.data, width=self.data.shape[1])
-        self.phaseVariance = opmap.phaseVarianceMap.PhaseVarianceMap(self.phase)
-        self.phaseVariancePeak = opmap.PhaseVariancePeakMap.PhaseVariancePeakMap(self.phaseVariance, threshold=threshold)
-        '''
 
 class Phase(object):
-    def __init__(self, srcDir, spatialSigma=32, temporalSigma=5, threshold=0.8):
+    def __init__(self, srcDir, threshold=0.8):
         src = MemStream(srcDir=srcDir, threshold=threshold)
-        print('data loaded')
         self.phase = opmap.phaseMap.PhaseMap(src, width=src.data.shape[1], sigma_mean=spatialSigma, sigma_t=temporalSigma)
-        print('phase')
         self.phaseVariance = opmap.phaseVarianceMap.PhaseVarianceMap(self.phase)
-        print('pv')
         self.phaseVariancePeak = opmap.PhaseVariancePeakMap.PhaseVariancePeakMap(self.phaseVariance, threshold=threshold)
-        print('pvp')

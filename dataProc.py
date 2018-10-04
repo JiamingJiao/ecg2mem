@@ -14,7 +14,7 @@ import time
 
 DATA_TYPE = np.float32
 CV_DATA_TYPE = cv.CV_32F
-INTERPOLATION_METHOD = cv.INTER_NEAREST # Use nearest interpolation if it is the last step, otherwise use cubic
+INTERPOLATION_METHOD = cv.INTER_NEAREST
 NORM_RANGE = (0, 1)
 VIDEO_ENCODER = 'H264'
 VIDEO_FPS = 50
@@ -61,6 +61,7 @@ class SparsePecg(object):
                 np.save(dstPath+'%06d'%i, self.dst)
             print('%s completed'%dstDirList[i])
 
+'''
 class AccurateUniformSparsePecg(object):
     def __init__(self, shape, samplePoints):
         rowStride = math.floor(shape[0]/samplePoints[0])
@@ -79,7 +80,7 @@ class AccurateUniformSparsePecg(object):
         self.pseudoEcg = np.ndarray(samplePoints, dtype=DATA_TYPE)
         self.dst = np.ndarray((shape), dtype=DATA_TYPE)
 
-    def calcPecg(self, src, samplePoints = (20, 20)):
+    def calcPecg(self, src, samplePoints=(20, 20)):
         cv.resize(src=src, dsize=self.multipleOfStride, dst=self.resized, fx=0, fy=0, interpolation=cv.INTER_CUBIC)
         cv.filter2D(src=self.resized, ddepth=CV_DATA_TYPE, kernel=PSEUDO_ECG_CONV_KERNEL, dst=self.diffV, anchor=(-1, -1), delta=0, borderType=cv.BORDER_REPLICATE)
         for row in range(0, samplePoints[0]):
@@ -87,6 +88,33 @@ class AccurateUniformSparsePecg(object):
                 cv.divide(self.diffV, self.distance[row, col], dst=self.quotient)
                 self.pseudoEcg[row, col] = cv.sumElems(self.quotient)[0]
         cv.resize(self.pseudoEcg, (src.shape[0], src.shape[1]), self.dst, 0, 0, INTERPOLATION_METHOD)
+'''
+
+class AccurateSparsePecg(SparsePecg):
+    def __init__(self, srcShape, coordinates, originalCoordinatesShape):
+        self.srcShape = srcShape
+        rowStride = math.floor(srcShape[0]/originalCoordinatesShape[0])
+        colStride = math.floor(srcShape[1]/originalCoordinatesShape[1])
+        self.multipleOfStride = ((originalCoordinatesShape[0]-1)*rowStride+1, (originalCoordinatesShape[1]-1)*colStride+1)
+        super.__init__(AccurateSparsePecg, self.multipleOfStride, coordinates)
+    
+    def resizeAndCalc(self, srcDirList, dstDirList):
+        resizedSrc = np.ndarray((self.multipleOfStride+(1,)), dtype=DATA_TYPE)
+        resizedDst = np.ndarray((self.srcShape+(1,)), dtype=DATA_TYPE)
+        length = len(srcDirList)
+        for i in range(0, length):
+            srcPath = srcDirList[i] + '/phie_'
+            src = loadData(srcPath)
+            dstPath = dstDirList[i]
+            if not os.path.exists(dstPath):
+                os.mkdir(dstPath)
+            for i in range(0, src.shape[0]):
+                cv.resize(src[i], self.multipleOfStride, resizedSrc, 0, 0, cv.INTER_CUBIC)
+                self.calcPecg(resizedSrc)
+                cv.resize(self.dst, self.srcShape, resizedDst, 0, 0, INTERPOLATION_METHOD)
+                np.save(dstPath+'%06d'%i, resizedDst)
+            print('%s completed'%dstDirList[i])
+
 
 def createDirList(dataDir, nameList, potentialName):
     length = len(nameList)
@@ -108,6 +136,11 @@ def uniformCoordinates(shape, limit):
     dst = np.ndarray((shape[0]*shape[1], 2), dtype=np.uint16)
     dst[:,0] = rowIndex.flatten()
     dst[:,1] = colIndex.flatten()
+    return dst
+
+def removePoints(src, num=0):
+    deletedPoints = random.sample(range(0, src.shape[0]), num)
+    dst = np.delete(src, deletedPoints, 0)
     return dst
 
 def clipData(src, bounds=(0, 1)):
