@@ -5,15 +5,26 @@ import cv2 as cv
 import numpy as np
 import math
 import os
-import dataProc
-import model
+import glob
+import matplotlib.pyplot as plt
 import keras.backend as K
 
-def calculateMAE(src1, src2):
+import opmap.videoData
+import opmap.phaseMap
+import opmap.phaseVarianceMap
+import opmap.PhaseVariancePeakMap
+
+import dataProc
+import model
+
+BLUE = '#0070c1'
+
+def calculateMae(src1, src2):
     difference = np.subtract(src1, src2)
     absDifference = np.abs(difference)
     mae = np.mean(absDifference)
-    return mae
+    std = np.std(difference, ddof=1)
+    return [mae, std]
 
 def histEqualizationArray(src, depth = 8):
     maxIntensity = 2**depth - 1
@@ -21,7 +32,7 @@ def histEqualizationArray(src, depth = 8):
     dst = np.zeros((maxIntensity+1), dtype = np.float64)
     pixNum = src.shape[0]*src.shape[1]
     histogram = cv.calcHist([src], [0], None, [maxIntensity+1], [0, maxIntensity+1])
-    hitogram = histogram.astype(np.float64)
+    histogram = histogram.astype(np.float64)
     for i in range(0, maxIntensity+1):
         dst[i] = temp + maxIntensity*histogram[i]/(pixNum)
         temp = dst[i]
@@ -47,15 +58,35 @@ def histSpecification(src, transArray):
             dst[i, j] = transArray[src[i, j]]
     return dst
 
-class intermediateLayers(model.networks):
+def plotEcg(srcDir, dstDir, coordinate=(100, 100), xrange=(-1, -1), ylimit=(-100, 0), xlabel=('Time / ms'), ylabel=('Membrane potential / mV')):
+    src = dataProc.loadData(srcDir)
+    ecg = src[:, coordinate[0], coordinate[1], :]
+    y = ecg.flatten()
+    if not xrange[0] == -1:
+        y = y[xrange[0]:]
+    if not xrange[1] == -1:
+        y = y[:xrange[1]-xrange[0]]
+    length = y.shape[0]
+    x = np.linspace(1, length, num=length)
+    figure = plt.figure(figsize=(9, 3), dpi=300)
+    plt.plot(x, y, linewidth=1, color=BLUE, figure=figure)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.ylim(ylimit)
+    plt.show()
+    if not os.path.exists(dstDir):
+        os.mkdir(dstDir)
+    figure.savefig(dstDir+'%d_%d.png'%coordinate, bbox_inches='tight')
+
+class IntermediateLayers(model.Networks):
     def __init__(self, src, netName = 'uNet', weightsPath = None, **kwargs):
-        super(intermediateLayers, self).__init__(**kwargs)
+        super(IntermediateLayers, self).__init__(**kwargs)
         self.netName = netName
         if self.netName == 'uNet':
             resizedSrc = np.ndarray((self.imgRows, self.imgCols), dtype = np.float32)
             resizedSrc = cv.resize(src, (self.imgRows, self.imgCols), resizedSrc, 0, 0, cv.INTER_NEAREST)
             self.input = resizedSrc[np.newaxis, :, :, np.newaxis]
-            self.network = super(intermediateLayers, self).uNet()
+            self.network = super(IntermediateLayers, self).uNet()
         self.network.load_weights(weightsPath)
         self.inputTensor = self.network.layers[0].input
 
@@ -75,8 +106,8 @@ class intermediateLayers(model.networks):
             layersList.append('decoder' + '%d'%decoderNum)
         # calculate intermediate layers
         layerNum = 0
-        max = -np.inf
-        min = np.inf
+        maxValue = -np.inf
+        minValue = np.inf
         minMax = open(dstPath + 'min_max.txt', 'w+')
         for layerName in layersList:
             features[layerNum] = self.intermediateFeatures(layerName)
@@ -86,14 +117,14 @@ class intermediateLayers(model.networks):
             if normalizationMode == 'layer':
                 features[layerNum] = 255*(features[layerNum] - layerMin)/(layerMax - layerMin)
             if normalizationMode == 'all':
-                if layerMax > max:
-                    max = layerMax
-                if layerMin < min:
-                    min = layerMin
+                if layerMax > maxValue:
+                    maxValue = layerMax
+                if layerMin < minValue:
+                    minValue = layerMin
             layerNum += 1
         minMax.close()
         if normalizationMode == 'all':
-            features = 255*(features - min)/(max - min)
+            features = 255*(features - minValue)/(maxValue - minValue)
         # resize and save
         resizedDst = np.ndarray((self.imgRows, self.imgCols), dtype = np.uint8)
         layerNum = 0
@@ -110,3 +141,19 @@ class intermediateLayers(model.networks):
                     resizedDst = cv.resize(features[layerNum][0, :, :, feature], (self.imgRows, self.imgCols), resizedDst, 0, 0, cv.INTER_NEAREST)
                     cv.imwrite(layerPath + "/%d"%(feature+1)+".png", resizedDst)
             layerNum += 1
+
+class MemStream(opmap.videoData.VideoData):
+    def __init__(self, srcDir, threshold, **videoDataArgs):
+        tempData = dataProc.loadData(srcDir, withChannel=False)
+        print(tempData.shape)
+        super(MemStream, self).__init__(length=tempData.shape[0], height=tempData.shape[1], width=tempData.shape[2], **videoDataArgs)
+        #fileList = sorted(glob.glob(srcDir+'mem/*.npy'))
+        self.camp = 'grey'
+        self.data = tempData
+
+class Phase(object):
+    def __init__(self, srcDir, threshold=0.8):
+        src = MemStream(srcDir=srcDir, threshold=threshold)
+        self.phase = opmap.phaseMap.PhaseMap(src, width=src.data.shape[1])
+        self.phaseVariance = opmap.phaseVarianceMap.PhaseVarianceMap(self.phase)
+        self.phaseVariancePeak = opmap.PhaseVariancePeakMap.PhaseVariancePeakMap(self.phaseVariance, threshold=threshold)
