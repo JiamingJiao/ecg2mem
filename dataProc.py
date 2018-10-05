@@ -51,7 +51,7 @@ class SparsePecg(object):
     def callCalc(self, srcDirList, dstDirList):
         length = len(srcDirList)
         for i in range(0, length):
-            srcPath = srcDirList[i] + '/phie_'
+            srcPath = srcDirList[i]
             src = loadData(srcPath)
             dstPath = dstDirList[i]
             if not os.path.exists(dstPath):
@@ -91,19 +91,22 @@ class AccurateUniformSparsePecg(object):
 '''
 
 class AccurateSparsePecg(SparsePecg):
-    def __init__(self, srcShape, coordinates, originalCoordinatesShape):
+    def __init__(self, srcShape, removeNum, fullCoordinatesShape, coordinatesDir):
         self.srcShape = srcShape
-        rowStride = math.floor(srcShape[0]/originalCoordinatesShape[0])
-        colStride = math.floor(srcShape[1]/originalCoordinatesShape[1])
-        self.multipleOfStride = ((originalCoordinatesShape[0]-1)*rowStride+1, (originalCoordinatesShape[1]-1)*colStride+1)
-        super.__init__(AccurateSparsePecg, self.multipleOfStride, coordinates)
+        rowStride = math.floor(srcShape[0]/fullCoordinatesShape[0])
+        colStride = math.floor(srcShape[1]/fullCoordinatesShape[1])
+        self.multipleOfStride = ((fullCoordinatesShape[0]-1)*rowStride+1, (fullCoordinatesShape[1]-1)*colStride+1)
+        fullCoordinates = uniformCoordinates(fullCoordinatesShape, self.multipleOfStride)
+        coordinates = removePoints(fullCoordinates, removeNum)
+        super(AccurateSparsePecg, self).__init__(self.multipleOfStride, coordinates)
+        np.save(coordinatesDir, self.coordinates)
     
     def resizeAndCalc(self, srcDirList, dstDirList):
         resizedSrc = np.ndarray((self.multipleOfStride+(1,)), dtype=DATA_TYPE)
         resizedDst = np.ndarray((self.srcShape+(1,)), dtype=DATA_TYPE)
         length = len(srcDirList)
         for i in range(0, length):
-            srcPath = srcDirList[i] + '/phie_'
+            srcPath = srcDirList[i]
             src = loadData(srcPath)
             dstPath = dstDirList[i]
             if not os.path.exists(dstPath):
@@ -113,7 +116,7 @@ class AccurateSparsePecg(SparsePecg):
                 self.calcPecg(resizedSrc)
                 cv.resize(self.dst, self.srcShape, resizedDst, 0, 0, INTERPOLATION_METHOD)
                 np.save(dstPath+'%06d'%i, resizedDst)
-            print('%s completed'%dstDirList[i])
+            print('%s completed'%dstPath)
 
 
 def createDirList(dataDir, nameList, potentialName):
@@ -150,37 +153,37 @@ def clipData(src, bounds=(0, 1)):
 def npyToPng(srcDir, dstDir):
     if not os.path.exists(dstDir):
         os.mkdir(dstDir)
-    src = loadData(srcDir=srcDir, normalization=True, normalizationRange=(0, 255))
+    src = loadData(srcDir=srcDir)
+    src, _, _ = normalize(src, (0, 255))
     for i in range(0, src.shape[0]):
         cv.imwrite(dstDir + "%06d"%i+".png", src[i, :, :])
     print('convert .npy to .png completed')
 
-def loadData(srcDir, resize=False, dstSize=(256, 256), normalization=False, normalizationRange=NORM_RANGE, addChannel=True):
+def loadData(srcDir, resize=False, dstSize=(256, 256), withChannel=True): # doesn't work with multi-channel image
     srcPathList = sorted(glob.glob(srcDir + '*.npy'))
-    lowerBound = normalizationRange[0]
-    upperBound = normalizationRange[1]
+    length = len(srcPathList)
     sample = np.load(srcPathList[0])
+    src = np.ndarray(sample.shape, dtype=DATA_TYPE)
     if resize == False:
         dstSize = (sample.shape[0], sample.shape[1])
     if sample.ndim == 2:
-        dst = np.ndarray(((len(srcPathList),)+dstSize), dtype=DATA_TYPE)
+        dst = np.ndarray((length,)+dstSize, dtype=DATA_TYPE)
     elif sample.ndim == 3:
-        dst = np.ndarray(((len(srcPathList),)+sample.shape), dtype=DATA_TYPE)
-    src = np.ndarray(sample.shape, dtype=DATA_TYPE)
-    index = 0
-    for srcPath in srcPathList:
-        src = np.load(srcPath)
         if resize == True:
-            dst[index] = cv.resize(src, dstSize, dst[index], 0, 0, INTERPOLATION_METHOD)
+            dst = np.ndarray(((length,)+dstSize), dtype=DATA_TYPE)
         else:
-            dst[index] = src
-        index += 1
-    if normalization == True:
-        minValue = np.amin(dst)
-        maxValue = np.amax(dst)
-        dst = lowerBound + ((dst-minValue)*(upperBound-lowerBound))/(maxValue-minValue)
-    if sample.ndim==2 and addChannel==True:
-        dst = dst.reshape((dst.shape[0], dst.shape[1], dst.shape[2], 1))
+            dst = np.ndarray(((length,)+sample.shape), dtype=DATA_TYPE)
+    for i in range(0, length):
+        src = np.load(srcPathList[i])
+        src = src.astype(DATA_TYPE)
+        if resize == True:
+            cv.resize(src, dstSize, dst[i], 0, 0, INTERPOLATION_METHOD)
+        else:
+            dst[i] = src
+    if withChannel==True:
+        dst = dst.reshape((length,)+dstSize+(1,))
+    else:
+        dst = dst.reshape((length,)+dstSize)
     return dst
 
 def create3dSequence(srcEcg, srcMem, temporalDepth, netGName):
@@ -207,8 +210,8 @@ def mergeSequence(pecgDirList, memDirList, temporalDepth, netGName=None, srcSize
     ecgList = np.empty(length, dtype=object)
     memList = np.empty(length, dtype=object)
     for i in range(0, length):
-        srcEcg = loadData(srcDir=pecgDirList[i], resize=True, dstSize=dstSize, normalization=False)
-        srcMem = loadData(srcDir=memDirList[i], resize=True, dstSize=dstSize, normalization=False)
+        srcEcg = loadData(srcDir=pecgDirList[i], resize=True, dstSize=dstSize)
+        srcMem = loadData(srcDir=memDirList[i], resize=True, dstSize=dstSize)
         if netGName=='convLstm' or netGName=='uNet3d':
             ecgList[i], memList[i] = create3dSequence(srcEcg, srcMem, temporalDepth, netGName)
         if netGName=='uNet':

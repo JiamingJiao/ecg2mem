@@ -144,7 +144,7 @@ class IntermediateLayers(model.Networks):
 
 class MemStream(opmap.videoData.VideoData):
     def __init__(self, srcDir, threshold, **videoDataArgs):
-        tempData = dataProc.loadData(srcDir, addChannel=False)
+        tempData = dataProc.loadData(srcDir, withChannel=False)
         print(tempData.shape)
         super(MemStream, self).__init__(length=tempData.shape[0], height=tempData.shape[1], width=tempData.shape[2], **videoDataArgs)
         #fileList = sorted(glob.glob(srcDir+'mem/*.npy'))
@@ -154,6 +154,6 @@ class MemStream(opmap.videoData.VideoData):
 class Phase(object):
     def __init__(self, srcDir, threshold=0.8):
         src = MemStream(srcDir=srcDir, threshold=threshold)
-        self.phase = opmap.phaseMap.PhaseMap(src, width=src.data.shape[1], sigma_mean=spatialSigma, sigma_t=temporalSigma)
+        self.phase = opmap.phaseMap.PhaseMap(src, width=src.data.shape[1])
         self.phaseVariance = opmap.phaseVarianceMap.PhaseVarianceMap(self.phase)
         self.phaseVariancePeak = opmap.PhaseVariancePeakMap.PhaseVariancePeakMap(self.phaseVariance, threshold=threshold)
