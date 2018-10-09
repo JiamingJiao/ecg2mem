@@ -19,7 +19,6 @@ pretrainedModelPath=None):
         netG = network.convLstm()
     elif netGName == 'uNet3d':
         netG = network.uNet3d()
-    pecg, mem = dataProc.mergeSequence(pecgDirList, memDirList, temporalDepth, netGName, rawSize, imgSize, dataProc.NORM_RANGE)
     netG.compile(optimizer=Adam(lr=learningRateG), loss=lossFuncG, metrics=[lossFuncG])
     netG.summary()
     if continueTrain == True:
@@ -28,6 +27,7 @@ pretrainedModelPath=None):
         os.mkdir(modelDir)
     checkpointer = ModelCheckpoint(modelDir+'netG_latest.h5', monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=True, mode='min')
     earlyStopping = EarlyStopping(patience=earlyStoppingPatience, verbose=1)
+    pecg, mem = dataProc.mergeSequence(pecgDirList, memDirList, temporalDepth, netGName, rawSize, imgSize, dataProc.NORM_RANGE)
     print('begin to train netG')
     historyG = netG.fit(x=pecg, y=mem, batch_size=batchSize, epochs=epochsNum, verbose=2, shuffle=True, validation_split=valSplit, callbacks=[checkpointer, earlyStopping])
 

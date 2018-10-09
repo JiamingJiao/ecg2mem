@@ -17,7 +17,8 @@ import opmap.PhaseVariancePeakMap
 import dataProc
 import model
 
-BLUE = '#0070c1'
+BLUE = (0, 0.439, 0.756)
+RED = (0.996, 0.380, 0.380)
 
 def calculateMae(src1, src2):
     difference = np.subtract(src1, src2)
@@ -157,3 +158,21 @@ class Phase(object):
         self.phase = opmap.phaseMap.PhaseMap(src, width=src.data.shape[1])
         self.phaseVariance = opmap.phaseVarianceMap.PhaseVarianceMap(self.phase)
         self.phaseVariancePeak = opmap.PhaseVariancePeakMap.PhaseVariancePeakMap(self.phaseVariance, threshold=threshold)
+
+def plotElectrodes(coordinates, radius=2, thickness=-1, color=RED, mapSize=(191, 191), dstPath=-1):
+    alpha = np.zeros((mapSize[0]+(radius+thickness+1)*2, mapSize[1]+(radius+thickness+1)*2, 1), dtype=np.uint8)
+    markerCenter = coordinates + radius + thickness + 1
+    for i in markerCenter:
+        center = tuple(i)
+        cv.circle(alpha, center, radius, (255,255,255), thickness, cv.LINE_AA)
+    cv.threshold(alpha, 127, 255, cv.THRESH_BINARY, alpha)
+    b = alpha*color[2]
+    b = b.astype(np.uint8)
+    g = alpha*color[1]
+    g = g.astype(np.uint8)
+    r = alpha*color[0]
+    r = r.astype(np.uint8)
+    dst = cv.merge((b, g, r, alpha))
+    if not dstPath == -1:
+        cv.imwrite(dstPath, dst)
+    return dst
