@@ -143,6 +143,7 @@ class Networks(object):
         model = Model(inputs=inputs, outputs=decoder6, name='shallowUnet')
         return model
 
+
     def uNet3d(self):
         inputs = Input((self.temporalDepth, self.imgRows, self.imgCols, self.channels))
         encoder1 = Conv3D(filters=self.gKernels, kernel_size=self.gKernelSize, strides=(1, 2, 2), padding='same', kernel_initializer='he_normal')(inputs)
