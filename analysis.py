@@ -37,12 +37,12 @@ def histEqualizationArray(src, depth = 8):
     for i in range(0, maxIntensity+1):
         dst[i] = temp + maxIntensity*histogram[i]/(pixNum)
         temp = dst[i]
-    dst = dst.astype(np.int32)
+    dst = dst.astype(np.int16)
     return dst
 
 def calculateHistTransArray(srcHist, dstHist, depth = 8):
     maxIntensity = 2**depth - 1
-    dst = np.zeros((maxIntensity+1), dtype = np.int32)
+    dst = np.zeros((maxIntensity+1), dtype = np.int16)
     accumulation = 0
     for i in range(0, maxIntensity+1):
         diff = maxIntensity+1
@@ -53,7 +53,7 @@ def calculateHistTransArray(srcHist, dstHist, depth = 8):
     return dst
 
 def histSpecification(src, transArray):
-    dst = np.zeros(src.shape, dtype = np.int32)
+    dst = np.zeros(src.shape, dtype = np.int16)
     for i in range(0, src.shape[0]):
         for j in range(0, src.shape[1]):
             dst[i, j] = transArray[src[i, j]]
@@ -159,7 +159,7 @@ class Phase(object):
         self.phaseVariance = opmap.phaseVarianceMap.PhaseVarianceMap(self.phase)
         self.phaseVariancePeak = opmap.PhaseVariancePeakMap.PhaseVariancePeakMap(self.phaseVariance, threshold=threshold)
 
-def plotElectrodes(coordinates, radius=2, thickness=-1, color=RED, mapSize=(191, 191), dstPath=-1):
+def plotMarkers(coordinates, radius=2, thickness=-1, color=RED, mapSize=(191, 191), dstPath=-1):
     alpha = np.zeros((mapSize[0]+(radius+thickness+1)*2, mapSize[1]+(radius+thickness+1)*2, 1), dtype=np.uint8)
     markerCenter = coordinates + radius + thickness + 1
     for i in markerCenter:
@@ -175,4 +175,15 @@ def plotElectrodes(coordinates, radius=2, thickness=-1, color=RED, mapSize=(191,
     dst = cv.merge((b, g, r, alpha))
     if not dstPath == -1:
         cv.imwrite(dstPath, dst)
+    return dst
+
+def centers(src):
+    _, contours, _ = cv.findContours(src, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE)
+    contoursNum = len(contours)
+    dst = np.ndarray((len(contours, 1, 2)), dtype=np.float32)
+    for i in range(0, contoursNum):
+        dst[i, 0, :] = np.mean(contours[i], 0)
+    dst = dst.reshape((contoursNum, 2))
+    dst = np.around(dst)
+    dst = dst.astype(np.uint16)
     return dst
