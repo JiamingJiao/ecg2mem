@@ -187,3 +187,24 @@ def centers(src):
     dst = np.around(dst)
     dst = dst.astype(np.uint16)
     return dst
+
+def distance(src1, src2):
+    num1 = src1.shape[0]
+    num2 = src2.shape[0]
+    allDistance = np.ndarray((num1, num2), dtype=np.float32)
+    for i in range(0, num1):
+        cv.magnitude(src2[: ,0]-src1[i, 0], src2[:, 1]-src1[i, 1], allDistance[i, :])
+    matchedNum = min(num1, num2)
+    distance = np.ndarray((matchedNum), dtype=np.float32)
+    for i in range(0, matchedNum):
+        location = np.unravel_index(allDistance.argmin())
+        distance[i] = allDistance[location]
+        allDistance[location[0], :] = np.inf
+        allDistance[:, location[1]] = np.inf
+    fp = 0
+    fn = 0
+    if num1 < num2:
+        fn = num2 - num1
+    elif num1 > num2:
+        fp = num1 - num2
+    return distance, fp, fn

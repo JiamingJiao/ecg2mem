@@ -91,13 +91,12 @@ class AccurateUniformSparsePecg(object):
 '''
 
 class AccurateSparsePecg(SparsePecg):
-    def __init__(self, srcShape, removeNum, fullCoordinatesShape, coordinatesDir):
+    def __init__(self, srcShape, removeNum, fullCoordinatesShape, parentCoordinates, coordinatesDir):
         self.srcShape = srcShape
         rowStride = math.floor(srcShape[0]/fullCoordinatesShape[0])
         colStride = math.floor(srcShape[1]/fullCoordinatesShape[1])
         self.multipleOfStride = ((fullCoordinatesShape[0]-1)*rowStride+1, (fullCoordinatesShape[1]-1)*colStride+1)
-        fullCoordinates = uniformCoordinates(fullCoordinatesShape, self.multipleOfStride)
-        coordinates = removePoints(fullCoordinates, removeNum)
+        coordinates = removePoints(parentCoordinates, removeNum)
         super(AccurateSparsePecg, self).__init__(self.multipleOfStride, coordinates)
         np.save(coordinatesDir, self.coordinates)
     
