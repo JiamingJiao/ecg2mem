@@ -16,7 +16,7 @@ DATA_TYPE = np.float32
 CV_DATA_TYPE = cv.CV_32F
 INTERPOLATION_METHOD = cv.INTER_NEAREST
 NORM_RANGE = (0, 1)
-VIDEO_ENCODER = 'H264'
+VIDEO_ENCODER = 'XVID'
 VIDEO_FPS = 50
 IMG_SIZE = (200, 200)
 PSEUDO_ECG_CONV_KERNEL = np.zeros((3, 3, 1), dtype=DATA_TYPE)
@@ -276,7 +276,7 @@ def makeVideo(srcDir, dstPath, frameRange=(-1, -1), padding=(0, 0)):
         srcPathList = srcPathList[:frameRange[1]-frameRange[0]]
     sample = cv.imread(srcPathList[0], -1)
     paddingArray = np.zeros_like(sample)
-    writer = cv.VideoWriter(filename=dstPath, fourcc=cv.VideoWriter_fourcc(*VIDEO_ENCODER), fps=VIDEO_FPS, frameSize=IMG_SIZE, isColor=False)
+    writer = cv.VideoWriter(filename=dstPath, fourcc=cv.VideoWriter_fourcc(*VIDEO_ENCODER), fps=VIDEO_FPS, frameSize=IMG_SIZE, isColor=True)
     for i in range(0, padding[0]):
         writer.write(paddingArray)
     for i in srcPathList:

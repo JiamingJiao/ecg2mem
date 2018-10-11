@@ -147,7 +147,6 @@ class IntermediateLayers(model.Networks):
 class MemStream(opmap.videoData.VideoData):
     def __init__(self, srcDir, threshold, **videoDataArgs):
         tempData = dataProc.loadData(srcDir, withChannel=False)
-        print(tempData.shape)
         super(MemStream, self).__init__(length=tempData.shape[0], height=tempData.shape[1], width=tempData.shape[2], **videoDataArgs)
         #fileList = sorted(glob.glob(srcDir+'mem/*.npy'))
         self.camp = 'grey'
@@ -180,11 +179,46 @@ def drawElectrodes(coordinates, radius=2, thickness=-1, color=RED, mapSize=(191,
         cv.imwrite(dstPath, dst)
     return dst
 
-def mark(memDir1, memDir, dstDir):
-    # make video
-    return 0
+def markPhaseSingularity(srcDir1, srcDir2, dstDir, priorMemRange, truncate=10, **drawMarkersArgs):
 
-def drawMarkers(src, coordinatesList, colors=(BLUE, GREEN, RED), markerType=cv.MARKER_SQUARE, markerSize=10, thickness=1):
+    def centersList(srcDir):
+        phase = Phase(srcDir)
+        phaseVariancePeak = phase.phaseVariancePeak.data[truncate:-truncate]
+        length = phaseVariancePeak.shape[0]
+        centersList = np.empty((length), dtype=object)
+        for i in range(0, length):
+            centersList[i] = centers(phaseVariancePeak[i])
+        return centersList
+    
+    centersList1 = centersList(srcDir1)
+    centersList2 = centersList(srcDir2)
+    length = centersList1.shape[0]
+    distance = np.empty((length), dtype=object)
+    background = dataProc.loadData(srcDir1, withChannel=False)[truncate:-truncate] # Markers are drawn on estimation
+    background = dataProc.scale(background, priorMemRange, (0, 255))
+    canvas = np.ndarray(background.shape+(3,), dtype=np.uint8)
+    statistics = np.zeros((5), dtype=np.float32) # mean, standard error, matching points, false postive, false negative
+    # Temporally, save video in the future
+    if not os.path.exists(dstDir):
+        os.makedirs(dstDir)
+    for i in range(0, length):
+        distance[i], matching, fp, fn = matchPoints(centersList1[i], centersList2[i])
+        canvas[i] = drawMarkers(background[i], (matching[0], fp, fn), **drawMarkersArgs)
+        statistics[2] += matching.shape[0]
+        statistics[3] += fp.shape[0]
+        statistics[4] += fn.shape[0]
+    if not dstDir == 'None':
+         for i in range(0, length):
+             # Temporally, save video in the future
+            cv.imwrite(dstDir+'%06d.png'%i, canvas[i])
+    else:
+        print('Images were not saved!')
+    distance = np.concatenate(distance)
+    statistics[0] = np.mean(distance)
+    statistics[1] = np.std(distance, ddof=1)
+    return canvas, statistics
+
+def drawMarkers(src, coordinatesList, colors=(BLUE, GREEN, RED), markerType=cv.MARKER_SQUARE, markerSize=20, thickness=2):
     # coordinatesList is a list of n*2 arrays
     # colors is a list of tupples
     # IMPORTANT: src data type: uint8, range: [0, 255]
