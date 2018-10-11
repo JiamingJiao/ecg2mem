@@ -19,6 +19,7 @@ import model
 
 BLUE = (0, 0.439, 0.756)
 RED = (0.996, 0.380, 0.380)
+GREEN = (0.102, 0.655, 0.631)
 
 def calculateMae(src1, src2):
     difference = np.subtract(src1, src2)
@@ -154,13 +155,15 @@ class MemStream(opmap.videoData.VideoData):
 
 class Phase(object):
     def __init__(self, srcDir, threshold=0.8):
-        src = MemStream(srcDir=srcDir, threshold=threshold)
-        self.phase = opmap.phaseMap.PhaseMap(src, width=src.data.shape[1])
+        self.mem = MemStream(srcDir=srcDir, threshold=threshold)
+        self.phase = opmap.phaseMap.PhaseMap(self.mem, width=self.mem.data.shape[1])
         self.phaseVariance = opmap.phaseVarianceMap.PhaseVarianceMap(self.phase)
         self.phaseVariancePeak = opmap.PhaseVariancePeakMap.PhaseVariancePeakMap(self.phaseVariance, threshold=threshold)
 
-def plotMarkers(coordinates, radius=2, thickness=-1, color=RED, mapSize=(191, 191), dstPath=-1):
+def drawElectrodes(coordinates, radius=2, thickness=-1, color=RED, mapSize=(191, 191), dstPath=-1):
     alpha = np.zeros((mapSize[0]+(radius+thickness+1)*2, mapSize[1]+(radius+thickness+1)*2, 1), dtype=np.uint8)
+    coordinates = np.around(coordinates)
+    coordinates = coordinates.astype(np.uint16)
     markerCenter = coordinates + radius + thickness + 1
     for i in markerCenter:
         center = tuple(i)
@@ -177,34 +180,60 @@ def plotMarkers(coordinates, radius=2, thickness=-1, color=RED, mapSize=(191, 19
         cv.imwrite(dstPath, dst)
     return dst
 
+def mark(memDir1, memDir, dstDir):
+    # make video
+    return 0
+
+def drawMarkers(src, coordinatesList, colors=(BLUE, GREEN, RED), markerType=cv.MARKER_SQUARE, markerSize=10, thickness=1):
+    # coordinatesList is a list of n*2 arrays
+    # colors is a list of tupples
+    # IMPORTANT: src data type: uint8, range: [0, 255]
+    src = src.astype(np.uint8)
+    canvas = np.ndarray(src.shape+(3,), dtype=np.uint8)
+    cv.cvtColor(src, cv.COLOR_GRAY2BGR, canvas, 3)
+    for i in range(0, len(coordinatesList)):
+        coordinates = coordinatesList[i]
+        coordinates = np.around(coordinates)
+        coordinates = coordinates.astype(np.uint16)
+        bgrColor = (colors[i][2]*255, colors[i][1]*255, colors[i][0]*255)
+        for j in range(0, coordinates.shape[0]):
+            cv.drawMarker(canvas, tuple(coordinates[j]), bgrColor, markerType, markerSize, thickness, cv.LINE_4)
+    return canvas
+
 def centers(src):
+    src = src.astype(np.uint8)
     _, contours, _ = cv.findContours(src, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE)
     contoursNum = len(contours)
-    dst = np.ndarray((len(contours, 1, 2)), dtype=np.float32)
+    dst = np.ndarray((contoursNum, 1, 2), dtype=np.float32)
     for i in range(0, contoursNum):
         dst[i, 0, :] = np.mean(contours[i], 0)
     dst = dst.reshape((contoursNum, 2))
-    dst = np.around(dst)
-    dst = dst.astype(np.uint16)
     return dst
 
-def distance(src1, src2):
+def matchPoints(src1, src2): #src2 is groundtruth
     num1 = src1.shape[0]
     num2 = src2.shape[0]
     allDistance = np.ndarray((num1, num2), dtype=np.float32)
     for i in range(0, num1):
         cv.magnitude(src2[: ,0]-src1[i, 0], src2[:, 1]-src1[i, 1], allDistance[i, :])
-    matchedNum = min(num1, num2)
-    distance = np.ndarray((matchedNum), dtype=np.float32)
-    for i in range(0, matchedNum):
-        location = np.unravel_index(allDistance.argmin())
-        distance[i] = allDistance[location]
-        allDistance[location[0], :] = np.inf
-        allDistance[:, location[1]] = np.inf
-    fp = 0
-    fn = 0
-    if num1 < num2:
-        fn = num2 - num1
+    matchingNum = min(num1, num2)
+    matching = np.ndarray((2, matchingNum, 2), dtype=np.float32)
+    distance = np.ndarray((matchingNum), dtype=np.float32)
+    location = np.ndarray((matchingNum, 2), dtype = np.uint8)
+    for i in range(0, matchingNum):
+        location[i] = np.unravel_index(allDistance.argmin(), (num1, num2))
+        distance[i] = allDistance[tuple(location[i])]
+        allDistance[location[i, 0], :] = np.inf
+        allDistance[:, location[i, 1]] = np.inf
+    matching[0, :, :] = src1[location[:, 0]] # advanced indexing
+    matching[1, :, :] = src2[location[:, 1]]
+    if num1 == num2:
+        fp = np.ndarray((0))
+        fn = np.ndarray((0))
     elif num1 > num2:
-        fp = num1 - num2
-    return distance, fp, fn
+        fp = np.delete(src1, location[:, 0], 0)
+        fn = np.ndarray((0))
+    else:
+        fp = np.ndarray((0))
+        fn = np.delete(src2, location[:, 1], 0)
+    return distance, matching, fp, fn

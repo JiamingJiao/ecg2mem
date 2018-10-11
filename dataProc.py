@@ -98,7 +98,10 @@ class AccurateSparsePecg(SparsePecg):
         self.multipleOfStride = ((fullCoordinatesShape[0]-1)*rowStride+1, (fullCoordinatesShape[1]-1)*colStride+1)
         coordinates = removePoints(parentCoordinates, removeNum)
         super(AccurateSparsePecg, self).__init__(self.multipleOfStride, coordinates)
-        np.save(coordinatesDir, self.coordinates)
+        if not coordinatesDir == 'None':
+            np.save(coordinatesDir, self.coordinates)
+        else:
+            print('coordinates were not saved!')
     
     def resizeAndCalc(self, srcDirList, dstDirList):
         resizedSrc = np.ndarray((self.multipleOfStride+(1,)), dtype=DATA_TYPE)
