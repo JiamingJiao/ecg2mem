@@ -121,7 +121,7 @@ class AccurateSparsePecg(SparsePecg):
             print('%s completed'%dstPath)
 
 
-def createDirList(dataDir, nameList, potentialName):
+def createDirList(dataDir, nameList, potentialName=''):
     length = len(nameList)
     dst = [None]*length
     for i in range(0, length):
@@ -209,18 +209,18 @@ def create3dEcg(src, temporalDepth, netGName):
 
 def mergeSequence(pecgDirList, memDirList, temporalDepth, netGName=None, srcSize=(200, 200), dstSize=(256, 256), normalizationRange=NORM_RANGE):
     length = len(pecgDirList)
-    ecgList = np.empty(length, dtype=object)
-    memList = np.empty(length, dtype=object)
+    ecg = np.empty(length, dtype=object)
+    mem = np.empty(length, dtype=object)
     for i in range(0, length):
         srcEcg = loadData(srcDir=pecgDirList[i], resize=True, dstSize=dstSize)
         srcMem = loadData(srcDir=memDirList[i], resize=True, dstSize=dstSize)
         if netGName=='convLstm' or netGName=='uNet3d':
-            ecgList[i], memList[i] = create3dSequence(srcEcg, srcMem, temporalDepth, netGName)
+            ecg[i], mem[i] = create3dSequence(srcEcg, srcMem, temporalDepth, netGName)
         if netGName=='uNet':
-            ecgList[i] = srcEcg
-            memList[i] = srcMem
-    ecg = np.concatenate(ecgList)
-    mem = np.concatenate(memList)
+            ecg[i] = srcEcg
+            mem[i] = srcMem
+    ecg = np.concatenate(ecg)
+    mem = np.concatenate(mem)
     ecg, minEcg, maxEcg = normalize(ecg, normalizationRange)
     mem, minMem, maxMem = normalize(mem, normalizationRange)
     print('min ecg is %.8f'%minEcg)

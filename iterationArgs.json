@@ -1,0 +1,13 @@
+{
+    "electrodes":
+    {
+        "dir": "None",
+        "initial": "None"
+    },
+    "train": 
+    {
+        "simulationDir": "None",
+        "nameList": ["20170710-2","20170711-2"],
+        "initialElectrodesDir": "None"
+    }
+}
