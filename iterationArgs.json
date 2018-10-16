@@ -1,13 +1,21 @@
 {
+    "experimentName": "20181017",
+    "simulationDir": "/mnt/recordings/SimulationResults/2D/",
+    "tempDir": "./temp/",
     "electrodes":
     {
-        "dir": "None",
-        "initial": "None"
+        "dir": "/mnt/recordings/SimulationResults/mapping/simulation_data/",
+        "initial": "None",
+        "mapSize": [200, 200],
+        "fullSize": [20, 20]
     },
     "train": 
     {
-        "simulationDir": "None",
-        "nameList": ["20170710-2","20170711-2"],
-        "initialElectrodesDir": "None"
+        "nameList": ["20170710-2","20170711-2"]
+    },
+    "iteration":
+    {
+        "initialStep": 100,
+        "maeThreshold": 5
     }
 }
