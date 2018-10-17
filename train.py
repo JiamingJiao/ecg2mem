@@ -9,9 +9,9 @@ from keras.callbacks import ModelCheckpoint, TensorBoard, EarlyStopping, ReduceL
 from model import Networks, Gan
 import dataProc
 
-def trainG(pecgDirList, memDirList, modelDir, rawSize=(200, 200), imgSize=(256, 256), channels=1, netGName='uNet', activationG='relu', lossFuncG='mae',
+def trainG(pecgDirList, memDirList, rawSize=(200, 200), imgSize=(256, 256), channels=1, netGName='uNet', activationG='relu', lossFuncG='mae',
 temporalDepth=None, gKernels=64, gKernelSize=None, epochsNum=100, batchSize=10, learningRateG=1e-4, earlyStoppingPatience=10, valSplit=0.2, continueTrain=False,
-pretrainedModelPath=None):
+pretrainedModelPath=None, modelDir=None):
     network = Networks(imgRows=imgSize[0], imgCols=imgSize[1], channels=channels, gKernels=gKernels, gKernelSize=gKernelSize, temporalDepth=temporalDepth)
     if netGName == 'uNet':
         netG = network.uNet()
@@ -27,7 +27,7 @@ pretrainedModelPath=None):
         os.mkdir(modelDir)
     checkpointer = ModelCheckpoint(modelDir+'netG_latest.h5', monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=True, mode='min')
     #earlyStopping = EarlyStopping(patience=earlyStoppingPatience, verbose=1)
-    learningRate = ReduceLROnPlateau('val_loss', 0.1, 10, 1, 'auto', 1e-4, min_lr=learningRateG*1e-4)
+    learningRate = ReduceLROnPlateau('val_loss', 0.1, earlyStoppingPatience, 1, 'auto', 1e-4, min_lr=learningRateG*1e-4)
     pecg, mem = dataProc.mergeSequence(pecgDirList, memDirList, temporalDepth, netGName, rawSize, imgSize, dataProc.NORM_RANGE)
     print('begin to train netG')
     historyG = netG.fit(x=pecg, y=mem, batch_size=batchSize, epochs=epochsNum, verbose=2, shuffle=True, validation_split=valSplit, callbacks=[checkpointer, learningRate])
