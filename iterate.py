@@ -12,14 +12,16 @@ def iterate(argsFilename='./iterationArgs.json'):
     with open(argsFilename) as argsFile:
         args = json.load(argsFile)
     simulationDir = args["simulationDir"]
-    trainingDataList = args["train"]["nameList"]
+    trainingDataList = args["training"]["nameList"]
+    predictionDataList = args["prediction"]["nameList"]
+    dataList = trainingDataList + predictionDataList
     tempDir = args["tempDir"]
     # Copy data to a temp folder in working directory
-    srcPhieDirList = dataProc.createDirList(simulationDir, trainingDataList, 'phie_')
-    srcVmemDirList = dataProc.createDirList(simulationDir, trainingDataList, 'vmem_')
-    phieDirList = dataProc.createDirList(tempDir+'phie/', trainingDataList)
-    vmemDirList = dataProc.createDirList(tempDir+'true_vmem/', trainingDataList)
-    for i in range(0, len(args["train"]["nameList"])):
+    srcPhieDirList = dataProc.createDirList(simulationDir, dataList, 'phie_')
+    srcVmemDirList = dataProc.createDirList(simulationDir, dataList, 'vmem_')
+    phieDirList = dataProc.createDirList(tempDir+'phie/', dataList)
+    vmemDirList = dataProc.createDirList(tempDir+'true_vmem/', dataList)
+    for i in range(0, len(dataList)):
         phieDir = phieDirList[i]
         os.makedirs(phieDir)
         srcPhieFiles = sorted(glob.glob(srcPhieDirList[i]+'*.npy'))
@@ -39,11 +41,12 @@ def iterate(argsFilename='./iterationArgs.json'):
     fullSize = args["electrodes"]["fullSize"]
     pecgDirList = dataProc.createDirList(tempDir+'pecg/', trainingDataList)
     inputSize = args["net"]["inputSize"]
-    trainArgs = (pecgDirList, vmemDirList, mapSize, inputSize, args["net"]["channels"], args["net"]["name"], args["net"]["activationG"], args["net"]["lossFuncG"],
-    args["net"]["temporalDepth"], args["net"]["gKernels"], args["net"]["gKernelSize"], args["net"]["epochsNum"], args["net"]["batchSize"], args["net"]["learningRateG"],
-    args["net"]["earlyStoppingPatience"], args["net"]["valSplit"])
+    generatorArgs = (args["net"]["name"], mapSize, args["net"]["batchSize"], inputSize, args["net"]["channels"], args["net"]["gKernels"], args["net"]["gKernelSize"],
+    args["net"]["temporalDepth"], args["net"]["activationG"], args["net"]["lossFuncG"])
+    generator = train.Generator(generatorArgs)
+    trainArgs = (args["net"]["lossFuncG"], args["net"]["epochsNum"], args["net"]["earlyStoppingPatience"], args["net"]["valSplit"])
     isFirstIteration = True
-    bestParentModel = None
+    bestParentModelPath = None
     while True:
         electrodesNum = parentElectrodes.shape[0]-reducedNum
         electrodesPath = args["electrodesDir"]["dir"] + args["experimentName"] + '_%d_%d.npy'%(i, electrodesNum)
@@ -52,8 +55,9 @@ def iterate(argsFilename='./iterationArgs.json'):
         print('Messages from method: AccurateSparsePecg.resizeAndCalc are muted!')
         ecg.resizeAndCalc(phieDirList, pecgDirList)
         enablePrint()
-        modelPath = args["train"]["modelDir"] + args["experimentName"] + '/' + '%d_%d_'%(i, electrodesNum)
-        train.trainG(*trainArgs, continueTrain=isFirstIteration, pretrainedModelPath=bestParentModel, modelDir=modelPath)
+        modelPath = args["training"]["modelDir"] + args["experimentName"] + '/' + '%d_%d_'%(i, electrodesNum)
+        generator.train(pecgDirList, vmemDirList, isFirstIteration, bestParentModelPath, modelPath, *trainArgs)
+        #prediction
     return 0
 
 def disablePrint():

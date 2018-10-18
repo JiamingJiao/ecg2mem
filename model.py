@@ -23,9 +23,10 @@ from keras.utils import to_categorical
 import dataProc
 
 class Networks(object):
-    def __init__(self, imgRows=256, imgCols=256, channels=1, gKernels=64, dKernels=64, gKernelSize=4, temporalDepth=None, activationG=None, **kwargs):
-        self.imgRows = imgRows
-        self.imgCols = imgCols
+    def __init__(self, imgSize=(256, 256), channels=1, gKernels=64, dKernels=64, gKernelSize=3, temporalDepth=None, activationG=None, **kwargs):
+        self.imgSize = imgSize
+        self.imgRows = imgSize[0]
+        self.imgCols = imgSize[1]
         self.channels = channels
         self.gKernels = gKernels
         self.dKernels = dKernels

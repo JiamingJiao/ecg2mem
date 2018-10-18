@@ -9,10 +9,14 @@
         "initial": "None",
         "fullSize": [20, 20]
     },
-    "train": 
+    "training": 
     {
         "nameList": ["20170710-2","20170711-2"],
         "modelDir": "/mnt/recordings/SimulationResults/mapping/training/checkpoints/"
+    },
+    "prediction":
+    {
+        "nameList": ["20180228-1", "20180308-1"]
     },
     "iteration":
     {

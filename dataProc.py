@@ -61,35 +61,6 @@ class SparsePecg(object):
                 np.save(dstPath+'%06d'%i, self.dst)
             print('%s completed'%dstDirList[i])
 
-'''
-class AccurateUniformSparsePecg(object):
-    def __init__(self, shape, samplePoints):
-        rowStride = math.floor(shape[0]/samplePoints[0])
-        colStride = math.floor(shape[1]/samplePoints[1])
-        self.multipleOfStride = ((samplePoints[0]-1)*rowStride+1, (samplePoints[1]-1)*colStride+1)
-        self.resized = np.ndarray(self.multipleOfStride, dtype=DATA_TYPE) #Its size is a multiple of stride
-        self.diffV = np.ndarray(self.resized.shape, dtype=DATA_TYPE)
-        firstRowIndex = np.linspace(0, self.resized.shape[0], num=self.resized.shape[0], endpoint=False, dtype=DATA_TYPE)
-        firstColIndex = np.linspace(0, self.resized.shape[1], num=self.resized.shape[1], endpoint=False, dtype=DATA_TYPE)
-        colIndex, rowIndex = np.meshgrid(firstRowIndex, firstColIndex)
-        self.distance = np.ndarray((samplePoints + self.resized.shape), dtype=DATA_TYPE)
-        self.quotient = np.ndarray(self.resized.shape, dtype=DATA_TYPE)
-        for row in range(0, samplePoints[0]):
-            for col in range(0, samplePoints[1]):
-                cv.magnitude((rowIndex - row*rowStride), (colIndex - col*colStride), self.distance[row, col])
-        self.pseudoEcg = np.ndarray(samplePoints, dtype=DATA_TYPE)
-        self.dst = np.ndarray((shape), dtype=DATA_TYPE)
-
-    def calcPecg(self, src, samplePoints=(20, 20)):
-        cv.resize(src=src, dsize=self.multipleOfStride, dst=self.resized, fx=0, fy=0, interpolation=cv.INTER_CUBIC)
-        cv.filter2D(src=self.resized, ddepth=CV_DATA_TYPE, kernel=PSEUDO_ECG_CONV_KERNEL, dst=self.diffV, anchor=(-1, -1), delta=0, borderType=cv.BORDER_REPLICATE)
-        for row in range(0, samplePoints[0]):
-            for col in range(0, samplePoints[1]):
-                cv.divide(self.diffV, self.distance[row, col], dst=self.quotient)
-                self.pseudoEcg[row, col] = cv.sumElems(self.quotient)[0]
-        cv.resize(self.pseudoEcg, (src.shape[0], src.shape[1]), self.dst, 0, 0, INTERPOLATION_METHOD)
-'''
-
 class AccurateSparsePecg(SparsePecg):
     def __init__(self, srcShape, removeNum, fullCoordinatesShape, parentCoordinates, coordinatesDir):
         self.srcShape = srcShape
@@ -223,11 +194,12 @@ def mergeSequence(pecgDirList, memDirList, temporalDepth, netGName=None, srcSize
     mem = np.concatenate(mem)
     ecg, minEcg, maxEcg = normalize(ecg, normalizationRange)
     mem, minMem, maxMem = normalize(mem, normalizationRange)
+    dataRange = [minEcg, maxEcg, minMem, maxMem]
     print('min ecg is %.8f'%minEcg)
     print('max ecg is %.8f'%maxEcg)
     print('min mem is %.8f'%minMem)
     print('max mem is %.8f'%maxMem)
-    return [ecg, mem]
+    return [ecg, mem, dataRange]
 
 def splitTrainAndVal(src1, src2, valSplit):
     srcLength = src1.shape[0]
