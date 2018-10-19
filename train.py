@@ -30,10 +30,10 @@ class Generator(Networks):
         checkpointer = ModelCheckpoint(modelDir+'netg.h5', monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=True, mode='min')
         earlyStopping = EarlyStopping(patience=earlyStoppingPatience, verbose=1)
         learningRate = ReduceLROnPlateau('val_loss', 0.1, earlyStoppingPatience, 1, 'auto', 1e-4, min_lr=learningRateG*1e-4)
-        ecg, mem = dataProc.mergeSequence(ecgDirList, memDirList, self.temporalDepth, self.netg.name, self.rawSize, self.imgSize, dataProc.NORM_RANGE)
+        ecg, mem, dataRange = dataProc.mergeSequence(ecgDirList, memDirList, self.temporalDepth, self.netg.name, self.rawSize, self.imgSize, dataProc.NORM_RANGE)
         historyG = self.netg.fit(x=ecg, y=mem, batch_size=self.batchSize, epochs=epochsNum, verbose=2, shuffle=True, validation_split=valSplit,
         callbacks=[checkpointer, learningRate, earlyStopping])
-        return historyG
+        return [dataRange, historyG]
 
     def predict(self, ecgDirList, dstDirList, modelDir, priorEcgRange, priorMemRange, batchSize=10):
         self.netg.load_weights(modelDir)
@@ -69,7 +69,7 @@ trainingRatio=5, epochsNum=100, earlyStoppingPatience=10, batchSize=10, valSplit
 
     gan = Gan(imgSize[0], imgSize[1], channels, netDName, netgName, temporalDepth, gKernels, dKernels, gKernelSize, activationG, lossFuncG, gradientPenaltyWeight,
     lossDWeight, learningRateG, learningRateD, beta1, beta2, batchSize)
-    pecg, mem = dataProc.mergeSequence(pecgDirList, memDirList, temporalDepth, netgName, rawSize, imgSize, dataProc.NORM_RANGE)
+    pecg, mem, dataRange = dataProc.mergeSequence(pecgDirList, memDirList, temporalDepth, netgName, rawSize, imgSize, dataProc.NORM_RANGE)
     #delete some data here to match the batch size
     print('traing data loaded')
 
