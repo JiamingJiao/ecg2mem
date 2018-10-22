@@ -7,27 +7,31 @@ import numpy as np
 
 import dataProc
 import train
+import analysis
 
 def iterate(argsFilename='./iterationArgs.json'):
     with open(argsFilename) as argsFile:
         args = json.load(argsFile)
     simulationDir = args["simulationDir"]
     trainingDataList = args["training"]["nameList"]
-    predictionDataList = args["prediction"]["nameList"]
+    predictionDataList = args["prediction"]["nameList"]    
     dataList = trainingDataList + predictionDataList
+    trainingDataNum = len(trainingDataList)
+    predictionDataNum = len(predictionDataList)
     tempDir = args["tempDir"]
     # Copy data to a temp folder in working directory
     srcPhieDirList = dataProc.createDirList(simulationDir, dataList, 'phie_')
-    srcVmemDirList = dataProc.createDirList(simulationDir, dataList, 'vmem_')
+    srcTrueVmemDirList = dataProc.createDirList(simulationDir, dataList, 'vmem_')
     phieDirList = dataProc.createDirList(tempDir+'phie/', dataList)
-    vmemDirList = dataProc.createDirList(tempDir+'true_vmem/', dataList)
+    trueVmemDirList = dataProc.createDirList(tempDir+'true_vmem/', dataList)
+    vmemDirList = dataProc.createDirList(tempDir+'vmem/', predictionDataList)
     for i in range(0, len(dataList)):
         phieDir = phieDirList[i]
         os.makedirs(phieDir)
         srcPhieFiles = sorted(glob.glob(srcPhieDirList[i]+'*.npy'))
-        vmemDir = vmemDirList[i]
+        vmemDir = trueVmemDirList[i]
         os.makedirs(vmemDir)
-        srcVmemFiles = sorted(glob.glob(srcVmemDirList[i]+'*.npy'))
+        srcVmemFiles = sorted(glob.glob(srcTrueVmemDirList[i]+'*.npy'))
         for j in range(0, len(srcPhieFiles)):
             shutil.copy(srcPhieFiles[j], phieDir)
             shutil.copy(srcVmemFiles[j], vmemDir)
@@ -47,6 +51,11 @@ def iterate(argsFilename='./iterationArgs.json'):
     trainArgs = (args["net"]["lossFuncG"], args["net"]["epochsNum"], args["net"]["earlyStoppingPatience"], args["net"]["valSplit"])
     isFirstIteration = True
     bestParentModelPath = None
+    # Load true vmem for evaluation
+    trueVmem = np.empty((predictionDataNum), object)
+    for i in range(0, predictionDataNum):
+        trueVmem[i] = dataProc.loadData(dataList[trainingDataNum+i])
+    trueVmem = np.concatenate(trueVmem)
     while True:
         electrodesNum = parentElectrodes.shape[0]-reducedNum
         electrodesPath = args["electrodesDir"]["dir"] + args["experimentName"] + '_%d_%d.npy'%(i, electrodesNum)
@@ -55,9 +64,13 @@ def iterate(argsFilename='./iterationArgs.json'):
         print('Messages from method: AccurateSparsePecg.resizeAndCalc are muted!')
         ecg.resizeAndCalc(phieDirList, pecgDirList)
         enablePrint()
+        del ecg
         modelPath = args["training"]["modelDir"] + args["experimentName"] + '/' + '%d_%d_'%(i, electrodesNum)
-        generator.train(pecgDirList, vmemDirList, isFirstIteration, bestParentModelPath, modelPath, *trainArgs)
-        #prediction
+        dataRange, history = generator.train(pecgDirList[:trainingDataNum], trueVmemDirList[:trainingDataNum], isFirstIteration, bestParentModelPath, modelPath, *trainArgs)
+        #prediction and evaluation
+        vmem = generator.predict(pecgDirList[trainingDataNum:], vmemDirList, modelPath, dataRange[0:2], dataRange[2:4], args["net"]["batchSize"])
+        vmem = np.concatenate(vmem)
+        mae = analysis.calculateMae(vmem, trueVmem)
     return 0
 
 def disablePrint():

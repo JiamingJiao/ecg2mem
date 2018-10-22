@@ -38,6 +38,7 @@ class Generator(Networks):
     def predict(self, ecgDirList, dstDirList, modelDir, priorEcgRange, priorMemRange, batchSize=10):
         self.netg.load_weights(modelDir)
         length = len(ecgDirList)
+        mem = np.empty((length), dtype=object)
         for i in range(0, length):
             rawEcg = dataProc.loadData(srcDir=ecgDirList[i], resize=True, dstSize=self.imgSize)
             if self.netg.name == 'uNet':
@@ -46,19 +47,19 @@ class Generator(Networks):
                 ecg = dataProc.create3dEcg(rawEcg, self.temporalDepth, self.netg.name)
             ecg = dataProc.scale(ecg, priorEcgRange, dataProc.NORM_RANGE)
             print(ecg.shape)
-            mem = self.netg.predict(ecg, batch_size=self.batchSize, verbose=1)
-            pngMem = mem*255
-            mem = dataProc.scale(mem, dataProc.NORM_RANGE, priorMemRange)
+            mem[i] = self.netg.predict(ecg, batch_size=self.batchSize, verbose=1)
+            pngMem = mem[i]*255
+            mem[i] = dataProc.scale(mem[i], dataProc.NORM_RANGE, priorMemRange)
             npyDir = dstDirList[i] + 'npy/'
             if not os.path.exists(npyDir):
                 os.makedirs(npyDir)
             pngDir = dstDirList[i] + 'png/'
             if not os.path.exists(pngDir):
                 os.makedirs(pngDir)
-            for i in range (0, mem.shape[0]):
-                resizedMem = cv.resize(mem[i], self.rawSize)
+            for j in range (0, mem.shape[0]):
+                resizedMem = cv.resize(mem[i, j], self.rawSize)
                 np.save(npyDir+'%06d.npy'%i, resizedMem)
-                resizedPng = cv.resize(pngMem[i], self.rawSize)
+                resizedPng = cv.resize(pngMem[j], self.rawSize)
                 cv.imwrite(pngDir+'%06d.png'%i, resizedPng)
         return mem
 
