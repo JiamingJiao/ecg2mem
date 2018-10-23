@@ -21,7 +21,8 @@
     "iteration":
     {
         "initialStep": 100,
-        "maeThreshold": 5.0
+        "maeThreshold": 5.0,
+        "minimalElectrodes": 10
     },
     "net":
     {
