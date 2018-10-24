@@ -6,7 +6,7 @@
     "electrodes":
     {
         "dir": "/mnt/recordings/SimulationResults/mapping/simulation_data/",
-        "initial": "None",
+        "initial": "20181005_uniform_400.npy",
         "fullSize": [20, 20]
     },
     "training": 
@@ -22,7 +22,8 @@
     {
         "initialStep": 100,
         "maeThreshold": 5.0,
-        "minimalElectrodes": 10
+        "minimalElectrodes": 10,
+        "siblings": 5
     },
     "net":
     {

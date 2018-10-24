@@ -190,6 +190,7 @@ def mergeSequence(pecgDirList, memDirList, temporalDepth, netGName=None, srcSize
         if netGName=='uNet':
             ecg[i] = srcEcg
             mem[i] = srcMem
+    del srcEcg, srcMem
     ecg = np.concatenate(ecg)
     mem = np.concatenate(mem)
     ecg, minEcg, maxEcg = normalize(ecg, normalizationRange)
@@ -233,8 +234,10 @@ def copyData(srcPath, dstPath, startNum=0, endNum=None, shiftNum=0):
 def normalize(src, normalizationRange=NORM_RANGE):
     minValue = np.amin(src)
     maxValue = np.amax(src)
-    dst = normalizationRange[0] + ((src-minValue)*(normalizationRange[1]-normalizationRange[0])) / (maxValue-minValue)
-    return [dst, minValue, maxValue]
+    np.add(src, -minValue, src)
+    factor = (normalizationRange[1]-normalizationRange[0]) / (maxValue-minValue)
+    np.multiply(src, factor, src)
+    return [src, minValue, maxValue]
 
 def scale(src, priorRange=None, dstRange=(0, 1)):
     dst = dstRange[0] + ((src-priorRange[0])*(dstRange[1]-dstRange[0])) / (priorRange[1]-priorRange[0])

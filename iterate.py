@@ -52,7 +52,7 @@ def iterate(argsFilename='./iterationArgs.json'):
     generator = train.Generator(generatorArgs)
     trainArgs = (args["net"]["lossFuncG"], args["net"]["epochsNum"], args["net"]["earlyStoppingPatience"], args["net"]["valSplit"])
     notFirstIteration = False
-    bestParentModelPath = None
+    parentModelPath = None
     # Load true vmem for evaluation
     trueVmem = np.empty((predictionDataNum), object)
     for i in range(0, predictionDataNum):
@@ -60,40 +60,52 @@ def iterate(argsFilename='./iterationArgs.json'):
     trueVmem = np.concatenate(trueVmem)
     threshold = args["iteration"]["maeThreshold"]
     condition = True
+    i = 0
+    bestMae = np.inf
     while condition:
         electrodesNum = parentElectrodes.shape[0]-stepSize
-        electrodesPath = args["electrodesDir"]["dir"] + args["experimentName"] + '_%d_%d.npy'%(i, electrodesNum)
-        ecg = dataProc.AccurateSparsePecg(mapSize, stepSize, fullSize, parentElectrodes, electrodesPath)
-        disablePrint()
-        print('Messages from method: AccurateSparsePecg.resizeAndCalc are muted!')
-        ecg.resizeAndCalc(phieDirList, pecgDirList)
-        enablePrint()
-        del ecg
-        modelPath = args["training"]["modelDir"] + args["experimentName"] + '/' + '%d_%d_'%(i, electrodesNum)
-        dataRange, history = generator.train(pecgDirList[:trainingDataNum], trueVmemDirList[:trainingDataNum], notFirstIteration, bestParentModelPath, modelPath, *trainArgs)
-        notFirstIteration = True
-        #prediction and evaluation
-        vmem = generator.predict(pecgDirList[trainingDataNum:], vmemDirList, modelPath, dataRange[0:2], dataRange[2:4], args["net"]["batchSize"])
-        vmem = np.concatenate(vmem)
-        mae = analysis.calculateMae(vmem, trueVmem)
+        if notFirstIteration:
+            siblings = args["iteration"]["siblings"]
+        else:
+            siblings = 1
+        for j in range(0, siblings):
+            electrodesPath = args["electrodesDir"]["dir"] + args["experimentName"] + '_%d_%d.npy'%(i, electrodesNum)
+            ecg = dataProc.AccurateSparsePecg(mapSize, stepSize, fullSize, parentElectrodes, electrodesPath)
+            disablePrint()
+            print('Messages from method: AccurateSparsePecg.resizeAndCalc are muted!')
+            ecg.resizeAndCalc(phieDirList, pecgDirList)
+            enablePrint()
+            del ecg
+            modelPath = args["training"]["modelDir"] + args["experimentName"] + '/' + '%d_%d_'%(i, electrodesNum)
+            dataRange, history = generator.train(pecgDirList[:trainingDataNum], trueVmemDirList[:trainingDataNum], notFirstIteration, parentModelPath, modelPath, *trainArgs)
+            notFirstIteration = True
+            #prediction and evaluation
+            vmem = generator.predict(pecgDirList[trainingDataNum:], vmemDirList, modelPath, dataRange[0:2], dataRange[2:4], args["net"]["batchSize"])
+            vmem = np.concatenate(vmem)
+            mae = analysis.calculateMae(vmem, trueVmem)
+            if mae< bestMae:
+                bestElectrodesPath = electrodesPath
+                bestModelPath = modelPath
+                bestMae = mae
+        parentModelPath = bestModelPath
         # Find next electrodes number
-        parentElectrodes = np.load(electrodesPath)
-        if abs(mae-threshold) >= ZERO:
+        parentElectrodes = np.load(bestElectrodesPath)
+        if abs(bestMae-threshold) >= ZERO:
             if notFirstIteration:
-                k = (parentMae-mae) / (parentElectrodes.shape[0]-electrodesNum)
-                stepSize = (mae-threshold) / k
+                slope = (parentMae-bestMae) / (parentElectrodes.shape[0]-electrodesNum)
+                stepSize = (bestMae-threshold) / slope
             else:
-                if mae >= threshold:
+                if bestMae >= threshold:
                     print('MAE of initial electrodes is larger than threshold. ')
                     condition = False
                 stepSize = args["iteration"]["initialStep"]
             #nextElectrodesNum = parentElectrodes.shape[0]-stepSize
-            parentMae = mae
+            parentMae = bestMae
+            i += 1
         else:
             condition = False
         if condition == False:
             print('Iteration stopped. ')
-    return 0
 
 def disablePrint():
     sys.stdout = open(os.devnull, 'w')
