@@ -69,7 +69,7 @@ def iterate(argsFilename='./iterationArgs.json'):
         else:
             siblings = 1
         for j in range(0, siblings):
-            electrodesPath = args["electrodesDir"]["dir"] + args["experimentName"] + '_%d_%d.npy'%(i, electrodesNum)
+            electrodesPath = electrodesDir + args["experimentName"] + '_%d_%d.npy'%(i, electrodesNum)
             ecg = dataProc.AccurateSparsePecg(mapSize, stepSize, fullSize, parentElectrodes, electrodesPath)
             disablePrint()
             print('Messages from method: AccurateSparsePecg.resizeAndCalc are muted!')
