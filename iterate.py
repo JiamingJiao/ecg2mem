@@ -21,6 +21,8 @@ def iterate(argsFilename='./iterationArgs.json'):
     trainingDataNum = len(trainingDataList)
     predictionDataNum = len(predictionDataList)
     tempDir = args["tempDir"]
+    if os.path.exists(tempDir):
+        shutil.rmtree(tempDir)
     # Copy data to a temp folder in working directory
     srcPhieDirList = dataProc.createDirList(simulationDir, dataList, 'phie_')
     srcTrueVmemDirList = dataProc.createDirList(simulationDir, dataList, 'vmem_')
@@ -46,17 +48,13 @@ def iterate(argsFilename='./iterationArgs.json'):
     mapSize = args["mapSize"]
     fullSize = args["electrodes"]["fullSize"]
     pecgDirList = dataProc.createDirList(tempDir+'pecg/', trainingDataList)
-    inputSize = args["net"]["inputSize"]
-    generatorArgs = (args["net"]["name"], mapSize, args["net"]["batchSize"], inputSize, args["net"]["channels"], args["net"]["gKernels"], args["net"]["gKernelSize"],
-    args["net"]["temporalDepth"], args["net"]["activationG"], args["net"]["lossFuncG"])
-    generator = train.Generator(generatorArgs)
-    trainArgs = (args["net"]["lossFuncG"], args["net"]["epochsNum"], args["net"]["earlyStoppingPatience"], args["net"]["valSplit"])
+    generator = train.Generator(**args["generatorArgs"])
     notFirstIteration = False
     parentModelPath = None
     # Load true vmem for evaluation
     trueVmem = np.empty((predictionDataNum), object)
     for i in range(0, predictionDataNum):
-        trueVmem[i] = dataProc.loadData(dataList[trainingDataNum+i])
+        trueVmem[i] = dataProc.loadData(trueVmemDirList[trainingDataNum+i])
     trueVmem = np.concatenate(trueVmem)
     threshold = args["iteration"]["maeThreshold"]
     condition = True
@@ -77,7 +75,8 @@ def iterate(argsFilename='./iterationArgs.json'):
             enablePrint()
             del ecg
             modelPath = args["training"]["modelDir"] + args["experimentName"] + '/' + '%d_%d_'%(i, electrodesNum)
-            dataRange, history = generator.train(pecgDirList[:trainingDataNum], trueVmemDirList[:trainingDataNum], notFirstIteration, parentModelPath, modelPath, *trainArgs)
+            dataRange, history = generator.train(pecgDirList[:trainingDataNum], trueVmemDirList[:trainingDataNum], notFirstIteration, parentModelPath, modelPath, 
+            **args["trainArgs"])
             notFirstIteration = True
             #prediction and evaluation
             vmem = generator.predict(pecgDirList[trainingDataNum:], vmemDirList, modelPath, dataRange[0:2], dataRange[2:4], args["net"]["batchSize"])
@@ -105,6 +104,8 @@ def iterate(argsFilename='./iterationArgs.json'):
         else:
             condition = False
         if condition == False:
+            print('Deleting temporal files')
+            shutil.rmtree(tempDir)
             print('Iteration stopped. ')
 
 def disablePrint():

@@ -163,6 +163,8 @@ def drawElectrodes(coordinates, radius=2, thickness=-1, color=RED, mapSize=(191,
     alpha = np.zeros((mapSize[0]+(radius+thickness+1)*2, mapSize[1]+(radius+thickness+1)*2, 1), dtype=np.uint8)
     coordinates = np.around(coordinates)
     coordinates = coordinates.astype(np.uint16)
+    # Convert coordinate system of array to coordinate system of image (OpenCV style)
+    coordinates = np.flip(coordinates, 1)
     markerCenter = coordinates + radius + thickness + 1
     for i in markerCenter:
         center = tuple(i)
@@ -180,7 +182,7 @@ def drawElectrodes(coordinates, radius=2, thickness=-1, color=RED, mapSize=(191,
     return dst
 
 def markPhaseSingularity(srcDir1, srcDir2, dstDir, priorMemRange, truncate=10, **drawMarkersArgs):
-
+    
     def centersList(srcDir):
         phase = Phase(srcDir)
         phaseVariancePeak = phase.phaseVariancePeak.data[truncate:-truncate]
