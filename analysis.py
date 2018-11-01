@@ -159,6 +159,21 @@ class Phase(object):
         self.phaseVariance = opmap.phaseVarianceMap.PhaseVarianceMap(self.phase)
         self.phaseVariancePeak = opmap.PhaseVariancePeakMap.PhaseVariancePeakMap(self.phaseVariance, threshold=threshold)
 
+def drawRemovedElectrodes(parent, child, dstPath, **drawElectrodesArgs):
+    parentImg = drawElectrodes(parent, color=BLUE, dstPath=-1, **drawElectrodesArgs)
+    childImg = drawElectrodes(child, dstPath=-1, **drawElectrodesArgs)
+    removedAlpha = cv.subtract(parentImg[:, :, 3], childImg[:, :, 3])
+    removedBgr = np.zeros((parentImg.shape[:-1]+(3, )), dtype = np.float64)
+    parentImg = parentImg.astype(np.float64)
+    for i in range(0, 3):
+        removedBgr[:, :, i] = np.multiply(np.divide(removedAlpha, 255), parentImg[:, :, i])
+    removedBgr = removedBgr.astype(np.uint8)
+    dst = childImg[:, :, 0:3] + removedBgr
+    dst = cv.merge((dst[:, :, 0], dst[:, :, 1], dst[:, :, 2], parentImg[:, :, 0].astype(np.uint8)))
+    if not dstPath == -1:
+        cv.imwrite(dstPath, dst)
+    return dst
+
 def drawElectrodes(coordinates, radius=2, thickness=-1, color=RED, mapSize=(191, 191), dstPath=-1):
     alpha = np.zeros((mapSize[0]+(radius+thickness+1)*2, mapSize[1]+(radius+thickness+1)*2, 1), dtype=np.uint8)
     coordinates = np.around(coordinates)
