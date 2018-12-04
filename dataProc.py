@@ -26,20 +26,25 @@ PSEUDO_ECG_CONV_KERNEL[1, 1, 0] = -4
 ECG_FOLDER_NAME = 'pseudo_ecg'
 
 class SparsePecg(object):
-    def __init__(self, shape, coordinates):
+    def __init__(self, shape, coordinates, roi=-1):
         self.coordinates = coordinates
         self.shape = shape
-        firstRowIndex = np.linspace(0, self.shape[0], num=self.shape[0], endpoint=False, dtype=DATA_TYPE)
-        firstColIndex = np.linspace(0, self.shape[1], num=self.shape[1], endpoint=False, dtype=DATA_TYPE)
+        firstRowIndex = np.linspace(0, shape[0], num=shape[0], endpoint=False, dtype=DATA_TYPE)
+        firstColIndex = np.linspace(0, shape[1], num=shape[1], endpoint=False, dtype=DATA_TYPE)
         colIndex, rowIndex = np.meshgrid(firstRowIndex, firstColIndex)
         self.grid = (rowIndex, colIndex)
-        self.distance = np.ndarray(((coordinates.shape[0],) + self.shape), dtype=DATA_TYPE)
+        self.distance = np.ndarray(((coordinates.shape[0],) + shape), dtype=DATA_TYPE)
         for i in range(0, coordinates.shape[0]):
             cv.magnitude((rowIndex - coordinates[i, 0]), (colIndex - coordinates[i, 1]), self.distance[i])
         self.pseudoEcg = np.ndarray(coordinates.shape[0], dtype=DATA_TYPE)
-        self.diffV = np.ndarray(self.shape, dtype=DATA_TYPE)
-        self.quotient = np.ndarray(self.shape, dtype=DATA_TYPE)
-        self.dst = np.ndarray(self.shape, dtype=DATA_TYPE)
+        self.diffV = np.ndarray(shape, dtype=DATA_TYPE)
+        self.quotient = np.ndarray(shape, dtype=DATA_TYPE)
+        self.dst = np.ndarray(shape, dtype=DATA_TYPE)
+        if roi == -1:
+            self.roi = [[0, 0], [shape[0]-1, shape[1]-1]]
+        else:
+            self.roi = roi
+        self.dstInRoi = np.ndarray((self.roi[1][0]-self.roi[0][0], self.roi[1][1]-self.roi[0][1]), dtype=DATA_TYPE)
 
     def calcPecg(self, src):
         cv.filter2D(src=src, ddepth=CV_DATA_TYPE, kernel=PSEUDO_ECG_CONV_KERNEL, dst=self.diffV, anchor=(-1, -1), delta=0, borderType=cv.BORDER_REPLICATE)
@@ -47,6 +52,7 @@ class SparsePecg(object):
             cv.divide(self.diffV, self.distance[i], dst=self.quotient)
             self.pseudoEcg[i] = cv.sumElems(self.quotient)[0]
         self.dst = scipy.interpolate.griddata(self.coordinates, self.pseudoEcg, self.grid, method='nearest')
+        self.dstInRoi = np.copy(self.dst[self.roi[0][0]:self.roi[1][0], self.roi[0][1]:self.roi[1][1]])
 
     def callCalc(self, srcDirList, dstDirList):
         length = len(srcDirList)
@@ -58,7 +64,7 @@ class SparsePecg(object):
                 os.mkdir(dstPath)
             for i in range(0, src.shape[0]):
                 self.calcPecg(src[i])
-                np.save(dstPath+'%06d'%i, self.dst)
+                np.save(dstPath+'%06d'%i, self.dstInRoi)
             print('%s completed'%dstDirList[i])
 
 class AccurateSparsePecg(SparsePecg):
