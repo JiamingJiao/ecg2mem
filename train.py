@@ -12,7 +12,7 @@ import dataProc
 class Generator(Networks):
     def __init__(self, netgName, rawSize=(200, 200), batchSize=10, **networksArgs):
         super(Generator, self).__init__(**networksArgs)
-        getModel = {'uNet': self.uNet, 'convLstm': self.convLstm, 'uNet3d': self.uNet3d}
+        getModel = {'uNet': self.uNet, 'convLstm': self.convLstm, 'uNet3d': self.uNet3d, 'convLstm5': self.convLstm5}
         self.netg = getModel[netgName]()
         # Cannot make full use of GPU memroy if () is in the dictionary
         # instead of in the above line on Windows. Never know why.
@@ -21,7 +21,7 @@ class Generator(Networks):
         self.batchSize = batchSize
     
     def train(self, ecgDirList, memDirList, continueTrain=False, pretrainedModelPath=None, modelDir=None,
-    lossFuncG='mae', epochsNum=100, learningRateG=1e-4, earlyStoppingPatience=10, valSplit=0.2):
+    lossFuncG='mae', epochsNum=100, learningRateG=1e-4, earlyStoppingPatience=10, valSplit=0.2, length=200):
         self.netg.compile(optimizer=Adam(lr=learningRateG), loss=lossFuncG, metrics=[lossFuncG])
         if continueTrain == True:
             self.netg.load_weights(pretrainedModelPath)
@@ -30,9 +30,18 @@ class Generator(Networks):
         checkpointer = ModelCheckpoint(modelDir+'netg.h5', monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=True, mode='min')
         earlyStopping = EarlyStopping(patience=earlyStoppingPatience, verbose=1)
         learningRate = ReduceLROnPlateau('val_loss', 0.1, earlyStoppingPatience, 1, 'auto', 1e-4, min_lr=learningRateG*1e-4)
-        ecg, mem, dataRange = dataProc.mergeSequence(ecgDirList, memDirList, self.temporalDepth, self.netg.name, self.rawSize, self.imgSize, dataProc.NORM_RANGE)
-        historyG = self.netg.fit(x=ecg, y=mem, batch_size=self.batchSize, epochs=epochsNum, verbose=2, shuffle=True, validation_split=valSplit,
+        #ecg, mem, dataRange = dataProc.mergeSequence(ecgDirList, memDirList, self.temporalDepth, self.netg.name, self.rawSize, self.imgSize, dataProc.NORM_RANGE)
+        pecg = dataProc.Data(len(ecgDirList), length, self.rawSize[0], self.rawSize[1], 1)
+        pecg.set2dData(ecgDirList)
+        pecg.set3dData(self.temporalDepth)
+        vmem = dataProc.Data(len(ecgDirList), length, self.rawSize[0], self.rawSize[1], 1)
+        vmem.twoD = vmem.twoD[:, 5:, :, :, :]
+        vmem.twoD = vmem.twoD.reshape((vmem.twoD.shape[0]*vmem.twoD.reshape[1],) + vmem.twoD.shape[2:])
+        historyG = self.netg.fit(x=pecg.threeD, y=vmem.twoD, batch_size=self.batchSize, epochs=epochsNum, verbose=2, shuffle=True, validation_split=valSplit,
         callbacks=[checkpointer, learningRate, earlyStopping])
+        print(pecg.twoD.range)
+        print(vmem.twoD.range)
+        dataRange = pecg.twoD.range + vmem.twoD.range
         return [dataRange, historyG]
 
     def predict(self, ecgDirList, dstDirList, modelDir, priorEcgRange, priorMemRange, batchSize=10):

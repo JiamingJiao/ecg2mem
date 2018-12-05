@@ -8,6 +8,7 @@ import os
 import shutil
 import math
 import random
+import sys
 import scipy.interpolate
 
 import time
@@ -103,10 +104,13 @@ class Data(object):
         self.length = length
         self.twoD = np.zeros((groups, length, height, width, channels), dtype=DATA_TYPE)
         self.threeD = None
+        self.range = None
     
     def set2dData(self, dirList):
         for i in range(0, len(dirList)):
             self.twoD[i, :, :, :, :] = loadData(dirList[i])
+        self.twoD, minValue, maxValue = normalize(self.twoD)
+        self.range = [minValue, maxValue]
 
     def set3dData(self, temporalDepth):
         validLength = self.length - temporalDepth + 1
@@ -114,10 +118,14 @@ class Data(object):
         strides = (self.twoD.strides[0:2] + (self.twoD.strides[1],) + self.twoD.strides[2:]) # Expand dim_of_length to dim_of_length * dim_of_temporalDepth
         expanded = np.lib.stride_tricks.as_strided(self.twoD, shape=shape, strides=strides, writeable=False) # (groups, validLength, temporalDepth, height, width, channels)
 
+        print(sys.getsizeof(self.twoD))
+        print(sys.getsizeof(expanded))
+
         shape = ((self.groups*validLength,) + expanded.shape[2:]) # Merge the dim of groups and the dim of length
         #strides = ((expanded.strides[2],) + expanded.strides[2:])
         #self.threeD = np.lib.stride_tricks.as_strided(expanded, shape=shape, strides=strides, writeable=False) # This is wrong
         self.threeD = expanded.reshape(shape) # This is a view (?)
+        print(sys.getsizeof(self.threeD))
 
 def createDirList(dataDir, nameList, potentialName=''):
     length = len(nameList)
