@@ -35,7 +35,7 @@ class Generator(Networks):
         pecg.set2dData(ecgDirList)
         pecg.set3dData(self.temporalDepth)
         vmem = dataProc.Data(len(ecgDirList), length, self.rawSize[0], self.rawSize[1], 1)
-        vmem.twoD = vmem.twoD[:, 5:, :, :, :]
+        vmem.twoD = vmem.twoD[:, self.temporalDepth:, :, :, :]
         vmem.twoD = vmem.twoD.reshape((vmem.twoD.shape[0]*vmem.twoD.shape[1],) + vmem.twoD.shape[2:])
         historyG = self.netg.fit(x=pecg.threeD, y=vmem.twoD, batch_size=self.batchSize, epochs=epochsNum, verbose=2, shuffle=True, validation_split=valSplit,
         callbacks=[checkpointer, learningRate, earlyStopping])

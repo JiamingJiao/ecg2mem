@@ -122,10 +122,11 @@ class Data(object):
         print(sys.getsizeof(expanded))
 
         flattenedLength = self.groups*validLength
-        shape = ((flattenedLength,) + expanded.shape[2:]) # Merge the dim of groups and the dim of length
+        #shape = ((flattenedLength,) + expanded.shape[2:]) # Merge the dim of groups and the dim of length
         #strides = ((expanded.strides[2],) + expanded.strides[2:])
         #self.threeD = np.lib.stride_tricks.as_strided(expanded, shape=shape, strides=strides, writeable=False) # This is wrong
-        self.threeD = expanded.reshape(shape) # This is a view (?)
+        #self.threeD = expanded.reshape(shape) # This seems is not a view
+        
         '''
         self.threeD = [None]*(flattenedLength)
         for i in range(0, self.groups):
@@ -285,7 +286,8 @@ def scale(src, priorRange=None, dstRange=(0, 1)):
     dst = dstRange[0] + ((src-priorRange[0])*(dstRange[1]-dstRange[0])) / (priorRange[1]-priorRange[0])
     return dst
 
-def makeVideo(srcDir, dstPath, frameRange=(-1, -1), padding=(0, 0)):
+def makeVideo(srcDir, dstPath, frameRange=(-1, -1), padding=(0, 0), fps=VIDEO_FPS, frameSize=IMG_SIZE):
+    # color
     srcPathList = sorted(glob.glob(srcDir+'*.png'))
     if not frameRange[0] == -1:
         srcPathList = srcPathList[frameRange[0]:]
@@ -293,7 +295,7 @@ def makeVideo(srcDir, dstPath, frameRange=(-1, -1), padding=(0, 0)):
         srcPathList = srcPathList[:frameRange[1]-frameRange[0]]
     sample = cv.imread(srcPathList[0], -1)
     paddingArray = np.zeros_like(sample)
-    writer = cv.VideoWriter(filename=dstPath, fourcc=cv.VideoWriter_fourcc(*VIDEO_ENCODER), fps=VIDEO_FPS, frameSize=IMG_SIZE, isColor=True)
+    writer = cv.VideoWriter(filename=dstPath, fourcc=cv.VideoWriter_fourcc(*VIDEO_ENCODER), fps=fps, frameSize=frameSize, isColor=True)
     for i in range(0, padding[0]):
         writer.write(paddingArray)
     for i in srcPathList:
@@ -301,4 +303,16 @@ def makeVideo(srcDir, dstPath, frameRange=(-1, -1), padding=(0, 0)):
         writer.write(src)
     for i in range(0, padding[1]):
         writer.write(paddingArray)
+    writer.release
+
+def makeVideo2(srcDir, dstPath, fps=VIDEO_FPS, frameSize=IMG_SIZE):
+    # grey
+    src = loadData(srcDir)
+    src, _, _ = normalize(src, (0, 255))
+    src = src.astype(np.uint8)
+    writer = cv.VideoWriter(filename=dstPath, fourcc=cv.VideoWriter_fourcc(*VIDEO_ENCODER), fps=fps, frameSize=frameSize, isColor=False)
+    resized = np.zeros((frameSize + (1,)), dtype=np.uint8)
+    for i in range(0, src.shape[0]):
+        cv.resize(src[i], frameSize, resized, 0, 0, cv.INTER_CUBIC)
+        writer.write(resized)
     writer.release
