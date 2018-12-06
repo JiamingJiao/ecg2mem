@@ -121,10 +121,17 @@ class Data(object):
         print(sys.getsizeof(self.twoD))
         print(sys.getsizeof(expanded))
 
-        shape = ((self.groups*validLength,) + expanded.shape[2:]) # Merge the dim of groups and the dim of length
+        flattenedLength = self.groups*validLength
+        shape = ((flattenedLength,) + expanded.shape[2:]) # Merge the dim of groups and the dim of length
         #strides = ((expanded.strides[2],) + expanded.strides[2:])
         #self.threeD = np.lib.stride_tricks.as_strided(expanded, shape=shape, strides=strides, writeable=False) # This is wrong
         self.threeD = expanded.reshape(shape) # This is a view (?)
+        '''
+        self.threeD = [None]*(flattenedLength)
+        for i in range(0, self.groups):
+            for j in range(0, validLength):
+                self.threeD[i*validLength+j] = expanded[i, j, :, :, :, :]
+        '''
         print(sys.getsizeof(self.threeD))
 
 def createDirList(dataDir, nameList, potentialName=''):
