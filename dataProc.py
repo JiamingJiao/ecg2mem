@@ -10,7 +10,7 @@ import math
 import random
 import sys
 import scipy.interpolate
-
+import keras.utils
 import time
 
 DATA_TYPE = np.float32
@@ -100,40 +100,81 @@ class AccurateSparsePecg(SparsePecg):
 
 class Data(object):
     def __init__(self, groups, length, height, width, channels):
-        self.groups = groups
-        self.length = length
         self.twoD = np.zeros((groups, length, height, width, channels), dtype=DATA_TYPE)
-        self.threeD = None
-        self.range = None
+        self.groups = self.twoD.shape[0]
+        self.length = self.twoD.shape[1]
+        self.range = [np.amin(self.twoD), np.amax(self.twoD)]
     
     def set2dData(self, dirList):
+        # load and normalize
         for i in range(0, len(dirList)):
             self.twoD[i, :, :, :, :] = loadData(dirList[i])
+
+    def normalize(self):
         self.twoD, minValue, maxValue = normalize(self.twoD)
         self.range = [minValue, maxValue]
 
-    def set3dData(self, temporalDepth):
+class Pecg(Data):
+    def __init__(self, **dataArgs):
+        super(Pecg, self).__init__(**dataArgs)
+        #self.items = self.groups*self.length
+        self.rnn = None
+        self.train = None
+        self.val = None
+    
+    def setRnnData(self, temporalDepth):
+        self.normalize()
         validLength = self.length - temporalDepth + 1
         shape = ((self.groups, validLength, temporalDepth) + self.twoD.shape[2:])
         strides = (self.twoD.strides[0:2] + (self.twoD.strides[1],) + self.twoD.strides[2:]) # Expand dim_of_length to dim_of_length * dim_of_temporalDepth
-        expanded = np.lib.stride_tricks.as_strided(self.twoD, shape=shape, strides=strides, writeable=False) # (groups, validLength, temporalDepth, height, width, channels)
+        self.rnn = np.lib.stride_tricks.as_strided(self.twoD, shape=shape, strides=strides, writeable=False) # (groups, validLength, temporalDepth, height, width, channels)
+        #self.items = shape[0]*shape[1]
 
-        print(sys.getsizeof(self.twoD))
-        print(sys.getsizeof(expanded))
+    def splitTrainAndVal(self, valSplit):
+        trainingLength = math.floor(self.groups*valSplit)
+        self.train = self.rnn[0:trainingLength]
+        self.val = self.rnn[trainingLength:]
 
-        flattenedLength = self.groups*validLength
-        #shape = ((flattenedLength,) + expanded.shape[2:]) # Merge the dim of groups and the dim of length
-        #strides = ((expanded.strides[2],) + expanded.strides[2:])
-        #self.threeD = np.lib.stride_tricks.as_strided(expanded, shape=shape, strides=strides, writeable=False) # This is wrong
-        #self.threeD = expanded.reshape(shape) # This seems is not a view
+class Vmem(Pecg):
+    def __init__(self, **pecgArgs):
+        super(Vmem, self).__init__(**pecgArgs)
+
+    def setRnnData(self, temporalDepth):
+        self.normalize()
+        self.rnn = self.twoD[:, temporalDepth:, :, :, :] # (groups, validLength, height, width, channels)
+
+def shuffleData(ecg, vmem):
+    # shuffle on the dim of groups
+    state = np.random.get_state()
+    np.random.shuffle(ecg)
+    np.random.set_state(state)
+    np.random.shuffle(vmem)
+
+class generatorRnn(keras.utils.Sequence):
+    # batch generator, generate data from memory
+    # generate and read from memory, or generate and save to disk then read data from disk?
+    def __init__(self, pecg, vmem, batchSize):
+        self.pecg = pecg # 3D data, a view of the 2D data array
+        self.vmem = vmem
+        self.groups = self.pecg.shape[0]
+        self.length = self.pecg.shape[1]
+        self.batchSize = batchSize
         
-        '''
-        self.threeD = [None]*(flattenedLength)
-        for i in range(0, self.groups):
-            for j in range(0, validLength):
-                self.threeD[i*validLength+j] = expanded[i, j, :, :, :, :]
-        '''
-        print(sys.getsizeof(self.threeD))
+    def __len__(self):
+        return int(self.groups*self.length/self.batchSize)
+
+    def __getitem__(self, index):
+        groupIndexBegin = math.floor(index/self.length)
+        groupIndexEnd = math.floor((index+self.batchSize)/self.length)
+        timeIndexBegin = index % self.length
+        timeIndexEnd = (index+self.batchSize) % self.length
+        if groupIndexBegin == groupIndexEnd:
+            pecgBatch = self.pecg[groupIndexBegin, timeIndexBegin: timeIndexEnd]
+            vmemBatch = self.vmem[groupIndexBegin, timeIndexBegin: timeIndexEnd]
+        else:
+            pecgBatch = np.concatenate(self.pecg[groupIndexBegin, timeIndexBegin:], self.pecg[groupIndexEnd, :timeIndexEnd])
+            vmemBatch = np.concatenate(self.vmem[groupIndexBegin, timeIndexBegin:], self.pecg[groupIndexEnd, :timeIndexEnd])
+        return (pecgBatch, vmemBatch)
 
 def createDirList(dataDir, nameList, potentialName=''):
     length = len(nameList)
@@ -245,6 +286,7 @@ def mergeSequence(pecgDirList, memDirList, temporalDepth, netGName=None, srcSize
     print('max mem is %.8f'%maxMem)
     return [ecg, mem, dataRange]
 
+'''
 def splitTrainAndVal(src1, src2, valSplit):
     srcLength = src1.shape[0]
     valNum = math.floor(valSplit*srcLength + 0.1)
@@ -254,6 +296,7 @@ def splitTrainAndVal(src1, src2, valSplit):
     val2 = np.take(src2, randomIndices, 0)
     train2 = np.delete(src2, randomIndices, 0)
     return [train1, val1, train2, val2]
+'''
 
 def copyMassiveData(srcDirList, dstDir, potentialName):
     startNum = 0
