@@ -323,19 +323,19 @@ class Networks(object):
         decoder1 = ConvLSTM2D(self.gKernels*8, 1, padding='valid', activation='relu', kernel_initializer='he_normal', return_sequences=True)(encoder5)
         decoder1 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(decoder1)
         decoder1 = UpSampling3D(size=(1, 2, 2), name='decoder1')(decoder1) # output 2x2
-        #decoder1 = Dropout(0.5)(decoder1)
+        decoder1 = Dropout(0.5)(decoder1)
         connection1 = Concatenate(axis=-1, name='connection1')([decoder1, encoder4])
 
         decoder2 = ConvLSTM2D(self.gKernels*8, self.gKernelSize, padding='same', activation='relu', kernel_initializer='he_normal', return_sequences=True)(connection1)
         decoder2 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(decoder2)
         decoder2 = UpSampling3D(size=(1, 2, 2), name='decoder2')(decoder2) # output 4x4
-        #decoder2 = Dropout(0.5)(decoder2)
+        decoder2 = Dropout(0.5)(decoder2)
         connection2 = Concatenate(axis=-1, name='connection2')([decoder2, encoder3])
 
         decoder3 = ConvLSTM2D(self.gKernels*4, self.gKernelSize, padding='same', activation='relu', kernel_initializer='he_normal', return_sequences=True)(connection2)
         decoder3 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(decoder3)
         decoder3 = UpSampling3D(size=(1, 2, 2), name='decoder3')(decoder3) # output 8x8
-        #decoder3 = Dropout(0.5)(decoder3)
+        decoder3 = Dropout(0.5)(decoder3)
         connection3 = Concatenate(axis=-1, name='connection3')([decoder3, encoder2])
 
         decoder4 = ConvLSTM2D(self.gKernels*2, self.gKernelSize, padding='same', activation='relu', kernel_initializer='he_normal', return_sequences=True)(connection3)
@@ -345,13 +345,13 @@ class Networks(object):
         connection4 = Concatenate(axis=-1, name='connection4')([decoder4, encoder1])
 
         decoder5 = ConvLSTM2D(self.gKernels, self.gKernelSize, padding='same', activation='relu', kernel_initializer='he_normal', return_sequences=True)(connection4)
-        #decoder5 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(decoder5)
+        decoder5 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(decoder5)
         decoder5 = UpSampling3D(size=(1, 2, 2), name='decoder5')(decoder5) # output 32x32
         #decoder5 = Dropout(0.5)(decoder5)
 
-        decoder6 = ConvLSTM2D(self.gKernels, self.gKernelSize, padding='same', activation='relu', kernel_initializer='he_normal', return_sequences=True)(decoder5)
-        decoder6 = ConvLSTM2D(int(self.gKernels/2), self.gKernelSize, padding='same', activation='relu', kernel_initializer='he_normal', return_sequences=True)(decoder6)
-        decoder6 = ConvLSTM2D(int(self.gKernels/4), self.gKernelSize, padding='same', activation='relu', kernel_initializer='he_normal', return_sequences=False)(decoder6)
+        decoder6 = ConvLSTM2D(self.gKernels, self.gKernelSize, padding='same', activation='relu', kernel_initializer='he_normal', return_sequences=False)(decoder5)
+        #decoder6 = ConvLSTM2D(int(self.gKernels/2), self.gKernelSize, padding='same', activation='relu', kernel_initializer='he_normal', return_sequences=True)(decoder6)
+        #decoder6 = ConvLSTM2D(int(self.gKernels/4), self.gKernelSize, padding='same', activation='relu', kernel_initializer='he_normal', return_sequences=False)(decoder6)
 
         decoder7 = Conv2D(1, self.gKernelSize, padding='same', activation='relu', kernel_initializer='he_normal')(decoder6)
         decoder7 = Conv2D(1, 1, activation=self.activationG, padding='valid', kernel_initializer='he_normal')(decoder7)

@@ -110,8 +110,8 @@ class Data(object):
         for i in range(0, len(dirList)):
             self.twoD[i, :, :, :, :] = loadData(dirList[i])
 
-    def normalize(self):
-        self.twoD, minValue, maxValue = normalize(self.twoD)
+    def normalize(self, normalizationRange=NORM_RANGE):
+        self.twoD, minValue, maxValue = normalize(self.twoD, normalizationRange=normalizationRange)
         self.range = [minValue, maxValue]
 
 class Pecg(Data):
@@ -121,9 +121,9 @@ class Pecg(Data):
         self.rnn = None
         self.train = None
         self.val = None
+        self.coordinates = None
     
     def setRnnData(self, temporalDepth):
-        self.normalize()
         validLength = self.length - temporalDepth + 1
         shape = ((self.groups, validLength, temporalDepth) + self.twoD.shape[2:])
         strides = (self.twoD.strides[0:2] + (self.twoD.strides[1],) + self.twoD.strides[2:]) # Expand dim_of_length to dim_of_length * dim_of_temporalDepth
@@ -140,8 +140,7 @@ class Vmem(Pecg):
         super(Vmem, self).__init__(**pecgArgs)
 
     def setRnnData(self, temporalDepth):
-        self.normalize()
-        self.rnn = self.twoD[:, temporalDepth:, :, :, :] # (groups, validLength, height, width, channels)
+        self.rnn = self.twoD[:, temporalDepth-1:, :, :, :] # (groups, validLength, height, width, channels)
 
 def shuffleData(ecg, vmem):
     # shuffle on the dim of groups
@@ -164,16 +163,16 @@ class generatorRnn(keras.utils.Sequence):
         return int(self.groups*self.length/self.batchSize)
 
     def __getitem__(self, index):
-        groupIndexBegin = math.floor(index/self.length)
-        groupIndexEnd = math.floor((index+self.batchSize)/self.length)
-        timeIndexBegin = index % self.length
-        timeIndexEnd = (index+self.batchSize) % self.length
+        groupIndexBegin = int(math.floor(index/self.length))
+        groupIndexEnd = int(math.floor((index+self.batchSize)/self.length))
+        timeIndexBegin = int(index % self.length)
+        timeIndexEnd = int((index+self.batchSize) % self.length)
         if groupIndexBegin == groupIndexEnd:
             pecgBatch = self.pecg[groupIndexBegin, timeIndexBegin: timeIndexEnd]
             vmemBatch = self.vmem[groupIndexBegin, timeIndexBegin: timeIndexEnd]
         else:
-            pecgBatch = np.concatenate(self.pecg[groupIndexBegin, timeIndexBegin:], self.pecg[groupIndexEnd, :timeIndexEnd])
-            vmemBatch = np.concatenate(self.vmem[groupIndexBegin, timeIndexBegin:], self.pecg[groupIndexEnd, :timeIndexEnd])
+            pecgBatch = np.concatenate((self.pecg[groupIndexBegin, timeIndexBegin:], self.pecg[groupIndexEnd, :timeIndexEnd]))
+            vmemBatch = np.concatenate((self.vmem[groupIndexBegin, timeIndexBegin:], self.vmem[groupIndexEnd, :timeIndexEnd]))
         return (pecgBatch, vmemBatch)
 
 def createDirList(dataDir, nameList, potentialName=''):
@@ -348,14 +347,19 @@ def makeVideo(srcDir, dstPath, frameRange=(-1, -1), padding=(0, 0), fps=VIDEO_FP
         writer.write(paddingArray)
     writer.release
 
-def makeVideo2(srcDir, dstPath, fps=VIDEO_FPS, frameSize=IMG_SIZE):
-    # grey
-    src = loadData(srcDir)
-    src, _, _ = normalize(src, (0, 255))
+def makeVideo2(src, dstPath, padding=(0, 0), fps=VIDEO_FPS, frameSize=IMG_SIZE, isColor=False):
+    # data will not be normalized to (0, 255)
+    #src = loadData(srcDir)
+    #src, _, _ = normalize(src, (0, 255))
     src = src.astype(np.uint8)
-    writer = cv.VideoWriter(filename=dstPath, fourcc=cv.VideoWriter_fourcc(*VIDEO_ENCODER), fps=fps, frameSize=frameSize, isColor=False)
+    writer = cv.VideoWriter(filename=dstPath, fourcc=cv.VideoWriter_fourcc(*VIDEO_ENCODER), fps=fps, frameSize=frameSize, isColor=isColor)
     resized = np.zeros((frameSize + (1,)), dtype=np.uint8)
+    paddingArray = np.zeros_like(resized)
+    for i in range(0, padding[0]):
+        writer.write(paddingArray)
     for i in range(0, src.shape[0]):
         cv.resize(src[i], frameSize, resized, 0, 0, cv.INTER_CUBIC)
         writer.write(resized)
+    for i in range(0, padding[1]):
+        writer.write(paddingArray)
     writer.release

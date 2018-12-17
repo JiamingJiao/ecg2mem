@@ -6,19 +6,19 @@ import datetime
 from keras.optimizers import Adam
 from keras.callbacks import ModelCheckpoint, TensorBoard, EarlyStopping, ReduceLROnPlateau
 
-from model import Networks, Gan
 import dataProc
+from model import Networks, Gan
+from analysis import calculateMae
 
 class Generator(Networks):
     def __init__(self, netgName, rawSize=(200, 200), batchSize=10, **networksArgs):
         super(Generator, self).__init__(**networksArgs)
         getModel = {'uNet': self.uNet, 'convLstm': self.convLstm, 'uNet3d': self.uNet3d, 'convLstm5': self.convLstm5}
         self.netg = getModel[netgName]()
-        # Cannot make full use of GPU memroy if () is in the dictionary
-        # instead of in the above line on Windows. Never know why.
         self.netg.summary()
         self.rawSize = rawSize
         self.batchSize = batchSize
+        self.dataRange = [0.0]*4 # minPecg, maxPecg, minVmem, maxVmem
     
     def trainConvLstm(self, pecgDirList, vmemDirList, continueTrain=False, pretrainedModelPath=None, modelDir=None,
     lossFuncG='mae', epochsNum=100, learningRateG=1e-4, earlyStoppingPatience=10, valSplit=0.2, length=200):
@@ -36,6 +36,8 @@ class Generator(Networks):
         vmem = dataProc.Vmem(groups=len(vmemDirList), length=length, height=self.rawSize[0], width=self.rawSize[1], channels=self.channels)
         pecg.set2dData(pecgDirList)
         vmem.set2dData(vmemDirList)
+        pecg.normalize()
+        vmem.normalize()
         dataProc.shuffleData(pecg.twoD, vmem.twoD)
         pecg.setRnnData(self.temporalDepth)
         vmem.setRnnData(self.temporalDepth)
@@ -43,41 +45,47 @@ class Generator(Networks):
         vmem.splitTrainAndVal(valSplit)
         trainGenerator = dataProc.generatorRnn(pecg.train, vmem.train, self.batchSize)
         valGenerator = dataProc.generatorRnn(pecg.val, vmem.val, self.batchSize)
-
-        historyG = self.netg.fit_generator(trainGenerator, epochs=epochsNum, verbose=2, callbacks=[checkpointer, learningRate, earlyStopping],
+        print(pecg.range)
+        print(vmem.range)
+        historyG = self.netg.fit_generator(trainGenerator, epochs=epochsNum, verbose=2, callbacks=[checkpointer, learningRate],
         validation_data=valGenerator, use_multiprocessing=True)
-        print(pecg.twoD.range)
-        print(vmem.twoD.range)
-        dataRange = pecg.twoD.range + vmem.twoD.range
-        return [dataRange, historyG]
+        self.dataRange[:2] = pecg.range
+        self.dataRange[2:] = vmem.range
+        return [self.dataRange, historyG]
 
-    def predict(self, ecgDirList, dstDirList, modelDir, priorEcgRange, priorMemRange, batchSize=10):
+    def predict(self, pecgDirList, dstDir, trueVmemDirList, modelDir, length=200, batchSize=10):
         self.netg.load_weights(modelDir)
-        length = len(ecgDirList)
-        mem = np.empty((length), dtype=object)
-        for i in range(0, length):
-            rawEcg = dataProc.loadData(srcDir=ecgDirList[i], resize=True, dstSize=self.imgSize)
-            if self.netg.name == 'uNet':
-                ecg = rawEcg
-            else:
-                ecg = dataProc.create3dEcg(rawEcg, self.temporalDepth, self.netg.name)
-            ecg = dataProc.scale(ecg, priorEcgRange, dataProc.NORM_RANGE)
-            print(ecg.shape)
-            mem[i] = self.netg.predict(ecg, batch_size=self.batchSize, verbose=1)
-            pngMem = mem[i]*255
-            mem[i] = dataProc.scale(mem[i], dataProc.NORM_RANGE, priorMemRange)
-            npyDir = dstDirList[i] + 'npy/'
+        pecg = dataProc.Pecg(groups=len(pecgDirList), length=length, height=self.rawSize[0], width=self.rawSize[1], channels=self.channels)
+        pecg.set2dData(pecgDirList)
+        pecg.twoD = dataProc.scale(pecg.twoD, self.dataRange[:2])
+        pecg.setRnnData(self.temporalDepth)
+        vmem = dataProc.Vmem(groups=len(pecgDirList), length=length, height=self.rawSize[0], width=self.rawSize[1], channels=self.channels)
+        vmem.setRnnData(self.temporalDepth)
+        scaledPng = np.zeros((self.rawSize + (self.channels,)), dtype=dataProc.DATA_TYPE)
+        for i in range(0, vmem.groups):
+            # predict, then save .npy and .png files
+            vmem.rnn[i] = self.netg.predict(pecg.rnn[i], batch_size=self.batchSize, verbose=1)
+            npyDir = ''.join([dstDir, pecgDirList[i][-23:-6], '/npy/']) # create a folder for every sequence
+            pngDir = ''.join([dstDir, pecgDirList[i][-23:-6], '/png/'])
             if not os.path.exists(npyDir):
                 os.makedirs(npyDir)
-            pngDir = dstDirList[i] + 'png/'
             if not os.path.exists(pngDir):
                 os.makedirs(pngDir)
-            for j in range (0, mem.shape[0]):
-                resizedMem = cv.resize(mem[i, j], self.rawSize)
-                np.save(npyDir+'%06d.npy'%i, resizedMem)
-                resizedPng = cv.resize(pngMem[j], self.rawSize)
-                cv.imwrite(pngDir+'%06d.png'%i, resizedPng)
-        return mem
+            for j in range (0, vmem.rnn.shape[1]):
+                #resizedPng = cv.resize(vmem.rnn[i, j], self.rawSize)
+                scaledPng = 255*vmem.rnn[i,j]
+                cv.imwrite(pngDir+'%06d.png'%j, scaledPng)
+            vmem.rnn[i] = dataProc.scale(vmem.rnn[i], dataProc.NORM_RANGE, self.dataRange[2:])
+            for j in range (0, vmem.rnn.shape[1]):
+                #resizedMem = cv.resize(vmem.rnn[i, j], self.rawSize)
+                np.save(npyDir+'%06d.npy'%j, vmem.rnn[i, j])
+        # calculate MAE
+        trueVmem = dataProc.Vmem(groups=len(pecgDirList), length=length, height=self.rawSize[0], width=self.rawSize[1], channels=self.channels)
+        trueVmem.set2dData(trueVmemDirList)
+        trueVmem.setRnnData(self.temporalDepth)
+        mae,stdError = calculateMae(vmem.rnn, trueVmem.rnn)
+        print('mae is %f, std_error is %f'%(mae, stdError))
+
 
 # ((number of training samples*validation split ratio)/batch size) should be an integer
 '''
@@ -173,7 +181,6 @@ activationG='relu', lossFuncG='mae', temporalDepth=None, gKernels=64, gKernelSiz
             resizedPng = cv.resize(pngMem[i], rawSize)
             cv.imwrite(pngDir+'%06d.png'%i, resizedPng)
 '''
-
 
 def displayLoss(lossD, lossA, lossVal, beginingTime, epoch):
     lossValStr = ' - lossVal: ' + '%.6f'%lossVal[0]

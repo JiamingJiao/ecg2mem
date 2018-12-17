@@ -7,6 +7,7 @@ import math
 import os
 import glob
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 import keras.backend as K
 
 import opmap.videoData
@@ -288,3 +289,17 @@ def matchPoints(src1, src2): #src2 is groundtruth
         fp = np.ndarray((0))
         fn = np.delete(src2, location[:, 1], 0)
     return distance, matching, fp, fn
+
+'''
+class ecgVideo(object):
+    def __init__(self, data, windowLength, acceleration=1.0, sampleRate=1000):
+        self.data = np.zeros(((data.shape[0]+windowLength*2,) + data.shape[1:]), dtype=dataProc.DATA_TYPE)
+        self.data[windowLength:windowLength+data.shape[0]] = data
+        self.windowLength = windowLength
+        self.fps = int(acceleration * sampleRate)
+        x = np.arrange(0)
+
+        figure, axes = plt.subplots()
+
+    def animate(self, i):
+''' 
