@@ -32,6 +32,7 @@ class Generator(Networks):
     def train(self, pecgDirList, vmemDirList, length=200, learningRateG=1e-4, lossFunc='mae', continueTrain=False, pretrainedModelPath=None,
     modelDir=None, earlyStoppingPatience=10, epochsNum=200, valSplit=0.2):
         self.epochsNum = epochsNum
+        self.valSplit = valSplit
         self.netg.compile(optimizer=Adam(lr=learningRateG), loss=lossFunc, metrics=[lossFunc])
         if continueTrain == True:
             self.netg.load_weights(pretrainedModelPath)
