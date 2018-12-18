@@ -13,45 +13,58 @@ from analysis import calculateMae
 class Generator(Networks):
     def __init__(self, netgName, rawSize=(200, 200), batchSize=10, **networksArgs):
         super(Generator, self).__init__(**networksArgs)
-        getModel = {'uNet': self.uNet, 'convLstm': self.convLstm, 'uNet3d': self.uNet3d, 'convLstm5': self.convLstm5}
+        getModel = {'uNet': self.uNet, 'convLstm': self.convLstm, 'uNet3d': self.uNet3d, 'convLstm5': self.convLstm5,
+        'seqConv5': self.seqConv5}
         self.netg = getModel[netgName]()
         self.netg.summary()
         self.rawSize = rawSize
         self.batchSize = batchSize
         self.dataRange = [0.0]*4 # minPecg, maxPecg, minVmem, maxVmem
-    
-    def trainConvLstm(self, pecgDirList, vmemDirList, continueTrain=False, pretrainedModelPath=None, modelDir=None,
-    lossFuncG='mae', epochsNum=100, learningRateG=1e-4, earlyStoppingPatience=10, valSplit=0.2, length=200):
-        self.netg.compile(optimizer=Adam(lr=learningRateG), loss=lossFuncG, metrics=[lossFuncG])
+        self.checkpointer = None
+        self.earlyStopping = None
+        self.learningRate = None
+        self.pecg = None
+        self.vmem = None
+        self.history = None
+        self.epochsNum = None
+        self.valSplit = None
+
+    def train(self, pecgDirList, vmemDirList, length=200, learningRateG=1e-4, lossFunc='mae', continueTrain=False, pretrainedModelPath=None,
+    modelDir=None, earlyStoppingPatience=10, epochsNum=200, valSplit=0.2):
+        self.epochsNum = epochsNum
+        self.netg.compile(optimizer=Adam(lr=learningRateG), loss=lossFunc, metrics=[lossFunc])
         if continueTrain == True:
             self.netg.load_weights(pretrainedModelPath)
         if not os.path.exists(modelDir):
             os.makedirs(modelDir)
-        checkpointer = ModelCheckpoint(modelDir+'netg.h5', monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=True, mode='min')
-        earlyStopping = EarlyStopping(patience=earlyStoppingPatience, verbose=1)
-        learningRate = ReduceLROnPlateau('val_loss', 0.1, earlyStoppingPatience, 1, 'auto', 1e-4, min_lr=learningRateG*1e-4)
+        self.checkpointer = ModelCheckpoint(modelDir+'netg.h5', monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=True, mode='min')
+        self.earlyStopping = EarlyStopping(patience=earlyStoppingPatience, verbose=1)
+        self.learningRate = ReduceLROnPlateau('val_loss', 0.1, earlyStoppingPatience, 1, 'auto', 1e-4, min_lr=learningRateG*1e-4)
+        self.pecg = dataProc.Pecg(groups=len(pecgDirList), length=length, height=self.rawSize[0], width=self.rawSize[1], channels=self.channels)
+        self.vmem = dataProc.Vmem(groups=len(vmemDirList), length=length, height=self.rawSize[0], width=self.rawSize[1], channels=self.channels)
+        self.pecg.set2dData(pecgDirList)
+        self.vmem.set2dData(vmemDirList)
+        self.pecg.normalize()
+        self.vmem.normalize()
+        self.dataRange = self.pecg.range + self.vmem.range
+        print(self.dataRange)
+        dataProc.shuffleData(self.pecg.twoD, self.vmem.twoD)
+        trainingFunc = {'convLstm': self.trainConvLstm, 'convLstm5': self.trainConvLstm, 'seqConv5': self.trainSeqConv5}
+        trainingFunc[self.netg.name]()
 
-        #ecg, mem, dataRange = dataProc.mergeSequence(ecgDirList, memDirList, self.temporalDepth, self.netg.name, self.rawSize, self.imgSize, dataProc.NORM_RANGE)
-        pecg = dataProc.Pecg(groups=len(pecgDirList), length=length, height=self.rawSize[0], width=self.rawSize[1], channels=self.channels)
-        vmem = dataProc.Vmem(groups=len(vmemDirList), length=length, height=self.rawSize[0], width=self.rawSize[1], channels=self.channels)
-        pecg.set2dData(pecgDirList)
-        vmem.set2dData(vmemDirList)
-        pecg.normalize()
-        vmem.normalize()
-        dataProc.shuffleData(pecg.twoD, vmem.twoD)
-        pecg.setRnnData(self.temporalDepth)
-        vmem.setRnnData(self.temporalDepth)
-        pecg.splitTrainAndVal(valSplit)
-        vmem.splitTrainAndVal(valSplit)
-        trainGenerator = dataProc.generatorRnn(pecg.train, vmem.train, self.batchSize)
-        valGenerator = dataProc.generatorRnn(pecg.val, vmem.val, self.batchSize)
-        print(pecg.range)
-        print(vmem.range)
-        historyG = self.netg.fit_generator(trainGenerator, epochs=epochsNum, verbose=2, callbacks=[checkpointer, learningRate],
+    def trainConvLstm(self):
+        self.pecg.setRnnData(self.temporalDepth)
+        self.vmem.setRnnData(self.temporalDepth)
+        self.pecg.splitTrainAndVal(self.valSplit)
+        self.vmem.splitTrainAndVal(self.valSplit)
+        trainGenerator = dataProc.generatorRnn(self.pecg.train, self.vmem.train, self.batchSize)
+        valGenerator = dataProc.generatorRnn(self.pecg.val, self.vmem.val, self.batchSize)
+        self.history = self.netg.fit_generator(trainGenerator, epochs=self.epochsNum, verbose=2, callbacks=[self.checkpointer, self.learningRate],
         validation_data=valGenerator, use_multiprocessing=True)
-        self.dataRange[:2] = pecg.range
-        self.dataRange[2:] = vmem.range
-        return [self.dataRange, historyG]
+
+    def trainSeqConv5(self):
+        self.history = self.netg.fit(x=self.pecg.twoD, y=self.vmem.twoD, batch_size=self.batchSize, epochs=self.epochsNum, verbose=2,
+        callbacks=[self.checkpointer, self.learningRate], validation_split=self.valSplit, shuffle=True)
 
     def predict(self, pecgDirList, dstDir, trueVmemDirList, modelDir, length=200, batchSize=10):
         self.netg.load_weights(modelDir)
