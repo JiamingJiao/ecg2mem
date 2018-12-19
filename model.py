@@ -408,12 +408,14 @@ class Networks(object):
         decoder5 = UpSampling3D(size=(1, 2, 2), name='decoder5')(decoder5) # output 32x32
         #decoder5 = Dropout(0.5)(decoder5)
 
-        decoder6 = Bidirectional(ConvLSTM2D(self.gKernels, self.gKernelSize, padding='same', activation='relu', kernel_initializer='he_normal', return_sequences=True))(decoder5)
+        #decoder6 = Bidirectional(ConvLSTM2D(self.gKernels, self.gKernelSize, padding='same', activation='relu', kernel_initializer='he_normal', return_sequences=True))(decoder5)
+        decoder6 = ConvLSTM2D(self.gKernels, self.gKernelSize, padding='same', activation='relu', kernel_initializer='he_normal', return_sequences=True)(decoder5)
         #outputs of two directions are concatenated
-
-        decoder7 = TimeDistributed(Conv2D(2, self.gKernelSize, padding='same', activation='relu', kernel_initializer='he_normal'))(decoder6)
+        #decoder6 = TimeDistributed(Conv2D(int(self.gKernels/2), self.gKernelSize, padding='same', activation='relu', kernel_initializer='he_normal'))(decoder6)
+        decoder6 = TimeDistributed(Conv2D(int(self.gKernels/4), self.gKernelSize, padding='same', activation='relu', kernel_initializer='he_normal'))(decoder6)
+        
+        decoder7 = TimeDistributed(Conv2D(1, self.gKernelSize, padding='same', activation='relu', kernel_initializer='he_normal'))(decoder6)
         decoder7 = TimeDistributed(Conv2D(1, 1, activation=self.activationG, padding='valid', kernel_initializer='he_normal'))(decoder7)
-
         model = Model(inputs=inputs, outputs=decoder7, name='seqConv5')
         return model
 
