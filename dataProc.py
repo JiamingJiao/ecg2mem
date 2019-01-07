@@ -102,8 +102,10 @@ class AccurateSparsePecg(SparsePecg):
 class Data(object):
     def __init__(self, groups, length, height, width, channels):
         self.twoD = np.zeros((groups, length, height, width, channels), dtype=DATA_TYPE)
-        self.groups = self.twoD.shape[0]
-        self.length = self.twoD.shape[1]
+        self.groups = groups
+        self.length = length
+        self.height = height
+        self.width = width
         self.range = [np.amin(self.twoD), np.amax(self.twoD)]
     
     def set2dData(self, dirList):
@@ -114,6 +116,30 @@ class Data(object):
     def normalize(self, normalizationRange=NORM_RANGE):
         self.twoD, minValue, maxValue = normalize(self.twoD, normalizationRange=normalizationRange)
         self.range = [minValue, maxValue]
+
+class Phie(Data):
+    def __init__(self, coordinates, **dataArgs):
+        super(Phie, self).__init__(**dataArgs)
+        self.train = None
+        self.val = None
+        self.coordinates = coordinates
+        self.ground = None
+
+    def setGround(self, index): # set reference point (ground, phie=0)
+        self.ground = index
+        np.subtract(self.twoD, self.twoD[:, :, self.coordinates[self.ground, 0], self.coordinates[self.ground, 1], :], out=self.twoD)
+
+    def downSample(self):
+        sampled = np.squeeze(self.twoD[:, :, self.coordinates[:, 0], self.coordinates[:, 1], :], 4)
+
+        firstRowIndex = np.linspace(0, self.height, num=self.height, endpoint=False, dtype=DATA_TYPE)
+        firstColIndex = np.linspace(0, self.width, num=self.width, endpoint=False, dtype=DATA_TYPE)
+        colIndex, rowIndex = np.meshgrid(firstRowIndex, firstColIndex)
+        grid = (rowIndex, colIndex)
+
+        for i, sequence in enumerate(self.twoD):
+            for j, frame in enumerate(sequence):
+                self.twoD[i, j, :, :, :]=scipy.interpolate.griddata(self.coordinates, sampled[i, j], grid, method='nearest')
 
 class Pecg(Data):
     def __init__(self, **dataArgs):
