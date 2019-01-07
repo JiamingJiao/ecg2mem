@@ -38,9 +38,9 @@ class Generator(Networks):
             self.netg.load_weights(pretrainedModelPath)
         if not os.path.exists(modelDir):
             os.makedirs(modelDir)
-        self.checkpointer = ModelCheckpoint(modelDir+'netg.h5', monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=True, mode='min')
-        self.earlyStopping = EarlyStopping(patience=earlyStoppingPatience, verbose=1)
-        self.learningRate = ReduceLROnPlateau('val_loss', 0.1, earlyStoppingPatience, 1, 'auto', 1e-4, min_lr=learningRateG*1e-4)
+        self.checkpointer = ModelCheckpoint(modelDir+'netg.h5', monitor='val_mean_absolute_error', verbose=1, save_best_only=True, save_weights_only=True, mode='min')
+        self.earlyStopping = EarlyStopping(patience=earlyStoppingPatience*5, verbose=1)
+        self.learningRate = ReduceLROnPlateau('val_mean_absolute_error', 0.1, earlyStoppingPatience, 1, 'auto', 1e-4, min_lr=learningRateG*1e-4)
         self.pecg = dataProc.Pecg(groups=len(pecgDirList), length=length, height=self.rawSize[0], width=self.rawSize[1], channels=self.channels)
         self.vmem = dataProc.Vmem(groups=len(vmemDirList), length=length, height=self.rawSize[0], width=self.rawSize[1], channels=self.channels)
         self.pecg.set2dData(pecgDirList)
@@ -52,7 +52,7 @@ class Generator(Networks):
         dataProc.shuffleData(self.pecg.twoD, self.vmem.twoD)
         trainingFunc = {'convLstm': self.trainConvLstm, 'convLstm5': self.trainConvLstm, 'seqConv5': self.trainSeqConv5}
         trainingFunc[self.netg.name]()
-
+        
     def trainConvLstm(self):
         self.pecg.setRnnData(self.temporalDepth)
         self.vmem.setRnnData(self.temporalDepth)
@@ -60,12 +60,12 @@ class Generator(Networks):
         self.vmem.splitTrainAndVal(self.valSplit)
         trainGenerator = dataProc.generatorRnn(self.pecg.train, self.vmem.train, self.batchSize)
         valGenerator = dataProc.generatorRnn(self.pecg.val, self.vmem.val, self.batchSize)
-        self.history = self.netg.fit_generator(trainGenerator, epochs=self.epochsNum, verbose=2, callbacks=[self.checkpointer, self.learningRate],
+        self.history = self.netg.fit_generator(trainGenerator, epochs=self.epochsNum, verbose=2, callbacks=[self.checkpointer, self.learningRate, self.earlyStopping],
         validation_data=valGenerator, use_multiprocessing=True)
 
     def trainSeqConv5(self):
         self.history = self.netg.fit(x=self.pecg.twoD, y=self.vmem.twoD, batch_size=self.batchSize, epochs=self.epochsNum, verbose=2,
-        callbacks=[self.checkpointer, self.learningRate], validation_split=self.valSplit, shuffle=True)
+        callbacks=[self.checkpointer, self.learningRate, self.earlyStopping], validation_split=self.valSplit, shuffle=True)
 
     def predict(self, pecgDirList, dstDir, trueVmemDirList, modelDir, length=200, batchSize=10):
         self.netg.load_weights(modelDir)

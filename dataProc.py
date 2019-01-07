@@ -27,7 +27,7 @@ PSEUDO_ECG_CONV_KERNEL[1, 1, 0] = -4
 ECG_FOLDER_NAME = 'pseudo_ecg'
 
 class SparsePecg(object):
-    def __init__(self, shape, coordinates, roi=-1):
+    def __init__(self, shape, coordinates, roi=-1, d=0):
         self.coordinates = coordinates
         self.shape = shape
         firstRowIndex = np.linspace(0, shape[0], num=shape[0], endpoint=False, dtype=DATA_TYPE)
@@ -37,6 +37,7 @@ class SparsePecg(object):
         self.distance = np.ndarray(((coordinates.shape[0],) + shape), dtype=DATA_TYPE)
         for i in range(0, coordinates.shape[0]):
             cv.magnitude((rowIndex - coordinates[i, 0]), (colIndex - coordinates[i, 1]), self.distance[i])
+            cv.magnitude(self.distance[i], d, self.distance[i])
         self.pseudoEcg = np.ndarray(coordinates.shape[0], dtype=DATA_TYPE)
         self.diffV = np.ndarray(shape, dtype=DATA_TYPE)
         self.quotient = np.ndarray(shape, dtype=DATA_TYPE)
@@ -350,7 +351,7 @@ def makeVideo(srcDir, dstPath, frameRange=(-1, -1), padding=(0, 0), fps=VIDEO_FP
 def makeVideo2(src, dstPath, padding=(0, 0), fps=VIDEO_FPS, frameSize=IMG_SIZE, isColor=False):
     # data will not be normalized to (0, 255)
     #src = loadData(srcDir)
-    #src, _, _ = normalize(src, (0, 255))
+    src, _, _ = normalize(src, (0, 255))
     src = src.astype(np.uint8)
     writer = cv.VideoWriter(filename=dstPath, fourcc=cv.VideoWriter_fourcc(*VIDEO_ENCODER), fps=fps, frameSize=frameSize, isColor=isColor)
     resized = np.zeros((frameSize + (1,)), dtype=np.uint8)
