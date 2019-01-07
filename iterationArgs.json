@@ -1,0 +1,47 @@
+{
+    "experimentName": "20181017",
+    "simulationDir": "/mnt/recordings/SimulationResults/2D/",
+    "tempDir": "./temp/",
+    "mapSize": [200, 200],
+    "electrodes":
+    {
+        "dir": "/mnt/recordings/SimulationResults/mapping/simulation_data/coordinates/",
+        "initial": "20181005_uniform_400.npy",
+        "fullSize": [20, 20]
+    },
+    "training": 
+    {
+        "nameList": ["20170710-2", "20170711-2"],
+        "modelDir": "/mnt/recordings/SimulationResults/mapping/training/checkpoints/"
+    },
+    "prediction":
+    {
+        "nameList": ["20180228-1", "20180308-1"]
+    },
+    "iteration":
+    {
+        "initialStep": 100,
+        "maeThreshold": 5.0,
+        "minimalElectrodes": 10,
+        "siblings": 5
+    },
+    "generatorArgs":
+    {
+        "netgName": "convLstm",
+        "inputSize": [256, 256],
+        "channels": 1,
+        "activationG": "relu",
+        "temporalDepth": 5,
+        "gKernels": 64,
+        "gKernelSize": 3,
+        "batchSize": 10
+    },
+    "trainArgs":
+    {
+        "epochsNum": 100,
+        "lossFuncG": "mae",
+        "learningRateG": 1e-4,
+        "earlyStoppingPatience": 10,
+        "valSplit": 0.2
+    }
+}

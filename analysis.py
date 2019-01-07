@@ -7,6 +7,7 @@ import math
 import os
 import glob
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 import keras.backend as K
 
 import opmap.videoData
@@ -159,10 +160,27 @@ class Phase(object):
         self.phaseVariance = opmap.phaseVarianceMap.PhaseVarianceMap(self.phase)
         self.phaseVariancePeak = opmap.PhaseVariancePeakMap.PhaseVariancePeakMap(self.phaseVariance, threshold=threshold)
 
+def drawRemovedElectrodes(parent, child, dstPath, **drawElectrodesArgs):
+    parentImg = drawElectrodes(parent, color=BLUE, dstPath=-1, **drawElectrodesArgs)
+    childImg = drawElectrodes(child, dstPath=-1, **drawElectrodesArgs)
+    removedAlpha = cv.subtract(parentImg[:, :, 3], childImg[:, :, 3])
+    removedBgr = np.zeros((parentImg.shape[:-1]+(3, )), dtype = np.float64)
+    parentImg = parentImg.astype(np.float64)
+    for i in range(0, 3):
+        removedBgr[:, :, i] = np.multiply(np.divide(removedAlpha, 255), parentImg[:, :, i])
+    removedBgr = removedBgr.astype(np.uint8)
+    dst = childImg[:, :, 0:3] + removedBgr
+    dst = cv.merge((dst[:, :, 0], dst[:, :, 1], dst[:, :, 2], parentImg[:, :, 0].astype(np.uint8)))
+    if not dstPath == -1:
+        cv.imwrite(dstPath, dst)
+    return dst
+
 def drawElectrodes(coordinates, radius=2, thickness=-1, color=RED, mapSize=(191, 191), dstPath=-1):
     alpha = np.zeros((mapSize[0]+(radius+thickness+1)*2, mapSize[1]+(radius+thickness+1)*2, 1), dtype=np.uint8)
     coordinates = np.around(coordinates)
     coordinates = coordinates.astype(np.uint16)
+    # Convert coordinate system of array to coordinate system of image (OpenCV style)
+    coordinates = np.flip(coordinates, 1)
     markerCenter = coordinates + radius + thickness + 1
     for i in markerCenter:
         center = tuple(i)
@@ -180,7 +198,7 @@ def drawElectrodes(coordinates, radius=2, thickness=-1, color=RED, mapSize=(191,
     return dst
 
 def markPhaseSingularity(srcDir1, srcDir2, dstDir, priorMemRange, truncate=10, **drawMarkersArgs):
-
+    
     def centersList(srcDir):
         phase = Phase(srcDir)
         phaseVariancePeak = phase.phaseVariancePeak.data[truncate:-truncate]
@@ -271,3 +289,17 @@ def matchPoints(src1, src2): #src2 is groundtruth
         fp = np.ndarray((0))
         fn = np.delete(src2, location[:, 1], 0)
     return distance, matching, fp, fn
+
+'''
+class ecgVideo(object):
+    def __init__(self, data, windowLength, acceleration=1.0, sampleRate=1000):
+        self.data = np.zeros(((data.shape[0]+windowLength*2,) + data.shape[1:]), dtype=dataProc.DATA_TYPE)
+        self.data[windowLength:windowLength+data.shape[0]] = data
+        self.windowLength = windowLength
+        self.fps = int(acceleration * sampleRate)
+        x = np.arrange(0)
+
+        figure, axes = plt.subplots()
+
+    def animate(self, i):
+''' 

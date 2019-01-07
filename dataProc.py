@@ -8,8 +8,9 @@ import os
 import shutil
 import math
 import random
+import sys
 import scipy.interpolate
-
+import keras.utils
 import time
 
 DATA_TYPE = np.float32
@@ -26,20 +27,26 @@ PSEUDO_ECG_CONV_KERNEL[1, 1, 0] = -4
 ECG_FOLDER_NAME = 'pseudo_ecg'
 
 class SparsePecg(object):
-    def __init__(self, shape, coordinates):
+    def __init__(self, shape, coordinates, roi=-1, d=0):
         self.coordinates = coordinates
         self.shape = shape
-        firstRowIndex = np.linspace(0, self.shape[0], num=self.shape[0], endpoint=False, dtype=DATA_TYPE)
-        firstColIndex = np.linspace(0, self.shape[1], num=self.shape[1], endpoint=False, dtype=DATA_TYPE)
+        firstRowIndex = np.linspace(0, shape[0], num=shape[0], endpoint=False, dtype=DATA_TYPE)
+        firstColIndex = np.linspace(0, shape[1], num=shape[1], endpoint=False, dtype=DATA_TYPE)
         colIndex, rowIndex = np.meshgrid(firstRowIndex, firstColIndex)
         self.grid = (rowIndex, colIndex)
-        self.distance = np.ndarray(((coordinates.shape[0],) + self.shape), dtype=DATA_TYPE)
+        self.distance = np.ndarray(((coordinates.shape[0],) + shape), dtype=DATA_TYPE)
         for i in range(0, coordinates.shape[0]):
             cv.magnitude((rowIndex - coordinates[i, 0]), (colIndex - coordinates[i, 1]), self.distance[i])
+            cv.magnitude(self.distance[i], d, self.distance[i])
         self.pseudoEcg = np.ndarray(coordinates.shape[0], dtype=DATA_TYPE)
-        self.diffV = np.ndarray(self.shape, dtype=DATA_TYPE)
-        self.quotient = np.ndarray(self.shape, dtype=DATA_TYPE)
-        self.dst = np.ndarray(self.shape, dtype=DATA_TYPE)
+        self.diffV = np.ndarray(shape, dtype=DATA_TYPE)
+        self.quotient = np.ndarray(shape, dtype=DATA_TYPE)
+        self.dst = np.ndarray(shape, dtype=DATA_TYPE)
+        if roi == -1:
+            self.roi = [[0, 0], [shape[0]-1, shape[1]-1]]
+        else:
+            self.roi = roi
+        self.dstInRoi = np.ndarray((self.roi[1][0]-self.roi[0][0], self.roi[1][1]-self.roi[0][1]), dtype=DATA_TYPE)
 
     def calcPecg(self, src):
         cv.filter2D(src=src, ddepth=CV_DATA_TYPE, kernel=PSEUDO_ECG_CONV_KERNEL, dst=self.diffV, anchor=(-1, -1), delta=0, borderType=cv.BORDER_REPLICATE)
@@ -47,6 +54,7 @@ class SparsePecg(object):
             cv.divide(self.diffV, self.distance[i], dst=self.quotient)
             self.pseudoEcg[i] = cv.sumElems(self.quotient)[0]
         self.dst = scipy.interpolate.griddata(self.coordinates, self.pseudoEcg, self.grid, method='nearest')
+        self.dstInRoi = np.copy(self.dst[self.roi[0][0]:self.roi[1][0], self.roi[0][1]:self.roi[1][1]])
 
     def callCalc(self, srcDirList, dstDirList):
         length = len(srcDirList)
@@ -58,37 +66,8 @@ class SparsePecg(object):
                 os.mkdir(dstPath)
             for i in range(0, src.shape[0]):
                 self.calcPecg(src[i])
-                np.save(dstPath+'%06d'%i, self.dst)
+                np.save(dstPath+'%06d'%i, self.dstInRoi)
             print('%s completed'%dstDirList[i])
-
-'''
-class AccurateUniformSparsePecg(object):
-    def __init__(self, shape, samplePoints):
-        rowStride = math.floor(shape[0]/samplePoints[0])
-        colStride = math.floor(shape[1]/samplePoints[1])
-        self.multipleOfStride = ((samplePoints[0]-1)*rowStride+1, (samplePoints[1]-1)*colStride+1)
-        self.resized = np.ndarray(self.multipleOfStride, dtype=DATA_TYPE) #Its size is a multiple of stride
-        self.diffV = np.ndarray(self.resized.shape, dtype=DATA_TYPE)
-        firstRowIndex = np.linspace(0, self.resized.shape[0], num=self.resized.shape[0], endpoint=False, dtype=DATA_TYPE)
-        firstColIndex = np.linspace(0, self.resized.shape[1], num=self.resized.shape[1], endpoint=False, dtype=DATA_TYPE)
-        colIndex, rowIndex = np.meshgrid(firstRowIndex, firstColIndex)
-        self.distance = np.ndarray((samplePoints + self.resized.shape), dtype=DATA_TYPE)
-        self.quotient = np.ndarray(self.resized.shape, dtype=DATA_TYPE)
-        for row in range(0, samplePoints[0]):
-            for col in range(0, samplePoints[1]):
-                cv.magnitude((rowIndex - row*rowStride), (colIndex - col*colStride), self.distance[row, col])
-        self.pseudoEcg = np.ndarray(samplePoints, dtype=DATA_TYPE)
-        self.dst = np.ndarray((shape), dtype=DATA_TYPE)
-
-    def calcPecg(self, src, samplePoints=(20, 20)):
-        cv.resize(src=src, dsize=self.multipleOfStride, dst=self.resized, fx=0, fy=0, interpolation=cv.INTER_CUBIC)
-        cv.filter2D(src=self.resized, ddepth=CV_DATA_TYPE, kernel=PSEUDO_ECG_CONV_KERNEL, dst=self.diffV, anchor=(-1, -1), delta=0, borderType=cv.BORDER_REPLICATE)
-        for row in range(0, samplePoints[0]):
-            for col in range(0, samplePoints[1]):
-                cv.divide(self.diffV, self.distance[row, col], dst=self.quotient)
-                self.pseudoEcg[row, col] = cv.sumElems(self.quotient)[0]
-        cv.resize(self.pseudoEcg, (src.shape[0], src.shape[1]), self.dst, 0, 0, INTERPOLATION_METHOD)
-'''
 
 class AccurateSparsePecg(SparsePecg):
     def __init__(self, srcShape, removeNum, fullCoordinatesShape, parentCoordinates, coordinatesDir):
@@ -120,8 +99,84 @@ class AccurateSparsePecg(SparsePecg):
                 np.save(dstPath+'%06d'%i, resizedDst)
             print('%s completed'%dstPath)
 
+class Data(object):
+    def __init__(self, groups, length, height, width, channels):
+        self.twoD = np.zeros((groups, length, height, width, channels), dtype=DATA_TYPE)
+        self.groups = self.twoD.shape[0]
+        self.length = self.twoD.shape[1]
+        self.range = [np.amin(self.twoD), np.amax(self.twoD)]
+    
+    def set2dData(self, dirList):
+        # load and normalize
+        for i in range(0, len(dirList)):
+            self.twoD[i, :, :, :, :] = loadData(dirList[i])
 
-def createDirList(dataDir, nameList, potentialName):
+    def normalize(self, normalizationRange=NORM_RANGE):
+        self.twoD, minValue, maxValue = normalize(self.twoD, normalizationRange=normalizationRange)
+        self.range = [minValue, maxValue]
+
+class Pecg(Data):
+    def __init__(self, **dataArgs):
+        super(Pecg, self).__init__(**dataArgs)
+        #self.items = self.groups*self.length
+        self.rnn = None
+        self.train = None
+        self.val = None
+        self.coordinates = None
+    
+    def setRnnData(self, temporalDepth):
+        validLength = self.length - temporalDepth + 1
+        shape = ((self.groups, validLength, temporalDepth) + self.twoD.shape[2:])
+        strides = (self.twoD.strides[0:2] + (self.twoD.strides[1],) + self.twoD.strides[2:]) # Expand dim_of_length to dim_of_length * dim_of_temporalDepth
+        self.rnn = np.lib.stride_tricks.as_strided(self.twoD, shape=shape, strides=strides, writeable=False) # (groups, validLength, temporalDepth, height, width, channels)
+        #self.items = shape[0]*shape[1]
+
+    def splitTrainAndVal(self, valSplit):
+        trainingLength = math.floor(self.groups*valSplit)
+        self.train = self.rnn[0:trainingLength]
+        self.val = self.rnn[trainingLength:]
+
+class Vmem(Pecg):
+    def __init__(self, **pecgArgs):
+        super(Vmem, self).__init__(**pecgArgs)
+
+    def setRnnData(self, temporalDepth):
+        self.rnn = self.twoD[:, temporalDepth-1:, :, :, :] # (groups, validLength, height, width, channels)
+
+def shuffleData(ecg, vmem):
+    # shuffle on the dim of groups
+    state = np.random.get_state()
+    np.random.shuffle(ecg)
+    np.random.set_state(state)
+    np.random.shuffle(vmem)
+
+class generatorRnn(keras.utils.Sequence):
+    # batch generator, generate data from memory
+    # generate and read from memory, or generate and save to disk then read data from disk?
+    def __init__(self, pecg, vmem, batchSize):
+        self.pecg = pecg # 3D data, a view of the 2D data array
+        self.vmem = vmem
+        self.groups = self.pecg.shape[0]
+        self.length = self.pecg.shape[1]
+        self.batchSize = batchSize
+        
+    def __len__(self):
+        return int(self.groups*self.length/self.batchSize)
+
+    def __getitem__(self, index):
+        groupIndexBegin = int(math.floor(index/self.length))
+        groupIndexEnd = int(math.floor((index+self.batchSize)/self.length))
+        timeIndexBegin = int(index % self.length)
+        timeIndexEnd = int((index+self.batchSize) % self.length)
+        if groupIndexBegin == groupIndexEnd:
+            pecgBatch = self.pecg[groupIndexBegin, timeIndexBegin: timeIndexEnd]
+            vmemBatch = self.vmem[groupIndexBegin, timeIndexBegin: timeIndexEnd]
+        else:
+            pecgBatch = np.concatenate((self.pecg[groupIndexBegin, timeIndexBegin:], self.pecg[groupIndexEnd, :timeIndexEnd]))
+            vmemBatch = np.concatenate((self.vmem[groupIndexBegin, timeIndexBegin:], self.vmem[groupIndexEnd, :timeIndexEnd]))
+        return (pecgBatch, vmemBatch)
+
+def createDirList(dataDir, nameList, potentialName=''):
     length = len(nameList)
     dst = [None]*length
     for i in range(0, length):
@@ -209,26 +264,29 @@ def create3dEcg(src, temporalDepth, netGName):
 
 def mergeSequence(pecgDirList, memDirList, temporalDepth, netGName=None, srcSize=(200, 200), dstSize=(256, 256), normalizationRange=NORM_RANGE):
     length = len(pecgDirList)
-    ecgList = np.empty(length, dtype=object)
-    memList = np.empty(length, dtype=object)
+    ecg = np.empty(length, dtype=object)
+    mem = np.empty(length, dtype=object)
     for i in range(0, length):
         srcEcg = loadData(srcDir=pecgDirList[i], resize=True, dstSize=dstSize)
         srcMem = loadData(srcDir=memDirList[i], resize=True, dstSize=dstSize)
         if netGName=='convLstm' or netGName=='uNet3d':
-            ecgList[i], memList[i] = create3dSequence(srcEcg, srcMem, temporalDepth, netGName)
+            ecg[i], mem[i] = create3dSequence(srcEcg, srcMem, temporalDepth, netGName)
         if netGName=='uNet':
-            ecgList[i] = srcEcg
-            memList[i] = srcMem
-    ecg = np.concatenate(ecgList)
-    mem = np.concatenate(memList)
+            ecg[i] = srcEcg
+            mem[i] = srcMem
+    del srcEcg, srcMem
+    ecg = np.concatenate(ecg)
+    mem = np.concatenate(mem)
     ecg, minEcg, maxEcg = normalize(ecg, normalizationRange)
     mem, minMem, maxMem = normalize(mem, normalizationRange)
+    dataRange = [minEcg, maxEcg, minMem, maxMem]
     print('min ecg is %.8f'%minEcg)
     print('max ecg is %.8f'%maxEcg)
     print('min mem is %.8f'%minMem)
     print('max mem is %.8f'%maxMem)
-    return [ecg, mem]
+    return [ecg, mem, dataRange]
 
+'''
 def splitTrainAndVal(src1, src2, valSplit):
     srcLength = src1.shape[0]
     valNum = math.floor(valSplit*srcLength + 0.1)
@@ -238,6 +296,7 @@ def splitTrainAndVal(src1, src2, valSplit):
     val2 = np.take(src2, randomIndices, 0)
     train2 = np.delete(src2, randomIndices, 0)
     return [train1, val1, train2, val2]
+'''
 
 def copyMassiveData(srcDirList, dstDir, potentialName):
     startNum = 0
@@ -261,14 +320,17 @@ def copyData(srcPath, dstPath, startNum=0, endNum=None, shiftNum=0):
 def normalize(src, normalizationRange=NORM_RANGE):
     minValue = np.amin(src)
     maxValue = np.amax(src)
-    dst = normalizationRange[0] + ((src-minValue)*(normalizationRange[1]-normalizationRange[0])) / (maxValue-minValue)
-    return [dst, minValue, maxValue]
+    np.add(src, -minValue, src)
+    factor = (normalizationRange[1]-normalizationRange[0]) / (maxValue-minValue)
+    np.multiply(src, factor, src)
+    return [src, minValue, maxValue]
 
 def scale(src, priorRange=None, dstRange=(0, 1)):
     dst = dstRange[0] + ((src-priorRange[0])*(dstRange[1]-dstRange[0])) / (priorRange[1]-priorRange[0])
     return dst
 
-def makeVideo(srcDir, dstPath, frameRange=(-1, -1), padding=(0, 0)):
+def makeVideo(srcDir, dstPath, frameRange=(-1, -1), padding=(0, 0), fps=VIDEO_FPS, frameSize=IMG_SIZE):
+    # color
     srcPathList = sorted(glob.glob(srcDir+'*.png'))
     if not frameRange[0] == -1:
         srcPathList = srcPathList[frameRange[0]:]
@@ -276,12 +338,29 @@ def makeVideo(srcDir, dstPath, frameRange=(-1, -1), padding=(0, 0)):
         srcPathList = srcPathList[:frameRange[1]-frameRange[0]]
     sample = cv.imread(srcPathList[0], -1)
     paddingArray = np.zeros_like(sample)
-    writer = cv.VideoWriter(filename=dstPath, fourcc=cv.VideoWriter_fourcc(*VIDEO_ENCODER), fps=VIDEO_FPS, frameSize=IMG_SIZE, isColor=True)
+    writer = cv.VideoWriter(filename=dstPath, fourcc=cv.VideoWriter_fourcc(*VIDEO_ENCODER), fps=fps, frameSize=frameSize, isColor=True)
     for i in range(0, padding[0]):
         writer.write(paddingArray)
     for i in srcPathList:
         src = cv.imread(i, -1)
         writer.write(src)
+    for i in range(0, padding[1]):
+        writer.write(paddingArray)
+    writer.release
+
+def makeVideo2(src, dstPath, padding=(0, 0), fps=VIDEO_FPS, frameSize=IMG_SIZE, isColor=False):
+    # data will not be normalized to (0, 255)
+    #src = loadData(srcDir)
+    src, _, _ = normalize(src, (0, 255))
+    src = src.astype(np.uint8)
+    writer = cv.VideoWriter(filename=dstPath, fourcc=cv.VideoWriter_fourcc(*VIDEO_ENCODER), fps=fps, frameSize=frameSize, isColor=isColor)
+    resized = np.zeros((frameSize + (1,)), dtype=np.uint8)
+    paddingArray = np.zeros_like(resized)
+    for i in range(0, padding[0]):
+        writer.write(paddingArray)
+    for i in range(0, src.shape[0]):
+        cv.resize(src[i], frameSize, resized, 0, 0, cv.INTER_CUBIC)
+        writer.write(resized)
     for i in range(0, padding[1]):
         writer.write(paddingArray)
     writer.release

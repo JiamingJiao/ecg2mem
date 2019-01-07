@@ -4,41 +4,112 @@ import os
 import math
 import datetime
 from keras.optimizers import Adam
-from keras.callbacks import ModelCheckpoint, TensorBoard, EarlyStopping, LearningRateScheduler
+from keras.callbacks import ModelCheckpoint, TensorBoard, EarlyStopping, ReduceLROnPlateau
 
-from model import Networks, Gan
 import dataProc
+from model import Networks, Gan
+from analysis import calculateMae
 
-def trainG(pecgDirList, memDirList, modelDir, rawSize=(200, 200), imgSize=(256, 256), channels=1, netGName='uNet', activationG='relu', lossFuncG='mae',
-temporalDepth=None, gKernels=64, gKernelSize=None, epochsNum=100, batchSize=10, learningRateG=1e-4, earlyStoppingPatience=10, valSplit=0.2, continueTrain=False,
-pretrainedModelPath=None):
-    network = Networks(imgRows=imgSize[0], imgCols=imgSize[1], channels=channels, gKernels=gKernels, gKernelSize=gKernelSize, temporalDepth=temporalDepth)
-    if netGName == 'uNet':
-        netG = network.uNet()
-    elif netGName == 'convLstm':
-        netG = network.convLstm()
-    elif netGName == 'uNet3d':
-        netG = network.uNet3d()
-    netG.compile(optimizer=Adam(lr=learningRateG), loss=lossFuncG, metrics=[lossFuncG])
-    netG.summary()
-    if continueTrain == True:
-        netG.load_weights(pretrainedModelPath)
-    if not os.path.exists(modelDir):
-        os.mkdir(modelDir)
-    checkpointer = ModelCheckpoint(modelDir+'netG_latest.h5', monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=True, mode='min')
-    earlyStopping = EarlyStopping(patience=earlyStoppingPatience, verbose=1)
-    pecg, mem = dataProc.mergeSequence(pecgDirList, memDirList, temporalDepth, netGName, rawSize, imgSize, dataProc.NORM_RANGE)
-    print('begin to train netG')
-    historyG = netG.fit(x=pecg, y=mem, batch_size=batchSize, epochs=epochsNum, verbose=2, shuffle=True, validation_split=valSplit, callbacks=[checkpointer, earlyStopping])
+class Generator(Networks):
+    def __init__(self, netgName, rawSize=(200, 200), batchSize=10, **networksArgs):
+        super(Generator, self).__init__(**networksArgs)
+        getModel = {'uNet': self.uNet, 'convLstm': self.convLstm, 'uNet3d': self.uNet3d, 'convLstm5': self.convLstm5,
+        'seqConv5': self.seqConv5}
+        self.netg = getModel[netgName]()
+        self.netg.summary()
+        self.rawSize = rawSize
+        self.batchSize = batchSize
+        self.dataRange = [0.0]*4 # minPecg, maxPecg, minVmem, maxVmem
+        self.checkpointer = None
+        self.earlyStopping = None
+        self.learningRate = None
+        self.pecg = None
+        self.vmem = None
+        self.history = None
+        self.epochsNum = None
+        self.valSplit = None
+
+    def train(self, pecgDirList, vmemDirList, length=200, learningRateG=1e-4, lossFunc='mae', continueTrain=False, pretrainedModelPath=None,
+    modelDir=None, earlyStoppingPatience=10, epochsNum=200, valSplit=0.2):
+        self.epochsNum = epochsNum
+        self.valSplit = valSplit
+        self.netg.compile(optimizer=Adam(lr=learningRateG), loss=lossFunc, metrics=[lossFunc])
+        if continueTrain == True:
+            self.netg.load_weights(pretrainedModelPath)
+        if not os.path.exists(modelDir):
+            os.makedirs(modelDir)
+        self.checkpointer = ModelCheckpoint(modelDir+'netg.h5', monitor='val_mean_absolute_error', verbose=1, save_best_only=True, save_weights_only=True, mode='min')
+        self.earlyStopping = EarlyStopping(patience=earlyStoppingPatience*5, verbose=1)
+        self.learningRate = ReduceLROnPlateau('val_mean_absolute_error', 0.1, earlyStoppingPatience, 1, 'auto', 1e-4, min_lr=learningRateG*1e-4)
+        self.pecg = dataProc.Pecg(groups=len(pecgDirList), length=length, height=self.rawSize[0], width=self.rawSize[1], channels=self.channels)
+        self.vmem = dataProc.Vmem(groups=len(vmemDirList), length=length, height=self.rawSize[0], width=self.rawSize[1], channels=self.channels)
+        self.pecg.set2dData(pecgDirList)
+        self.vmem.set2dData(vmemDirList)
+        self.pecg.normalize()
+        self.vmem.normalize()
+        self.dataRange = self.pecg.range + self.vmem.range
+        print(self.dataRange)
+        dataProc.shuffleData(self.pecg.twoD, self.vmem.twoD)
+        trainingFunc = {'convLstm': self.trainConvLstm, 'convLstm5': self.trainConvLstm, 'seqConv5': self.trainSeqConv5}
+        trainingFunc[self.netg.name]()
+        
+    def trainConvLstm(self):
+        self.pecg.setRnnData(self.temporalDepth)
+        self.vmem.setRnnData(self.temporalDepth)
+        self.pecg.splitTrainAndVal(self.valSplit)
+        self.vmem.splitTrainAndVal(self.valSplit)
+        trainGenerator = dataProc.generatorRnn(self.pecg.train, self.vmem.train, self.batchSize)
+        valGenerator = dataProc.generatorRnn(self.pecg.val, self.vmem.val, self.batchSize)
+        self.history = self.netg.fit_generator(trainGenerator, epochs=self.epochsNum, verbose=2, callbacks=[self.checkpointer, self.learningRate, self.earlyStopping],
+        validation_data=valGenerator, use_multiprocessing=True)
+
+    def trainSeqConv5(self):
+        self.history = self.netg.fit(x=self.pecg.twoD, y=self.vmem.twoD, batch_size=self.batchSize, epochs=self.epochsNum, verbose=2,
+        callbacks=[self.checkpointer, self.learningRate, self.earlyStopping], validation_split=self.valSplit, shuffle=True)
+
+    def predict(self, pecgDirList, dstDir, trueVmemDirList, modelDir, length=200, batchSize=10):
+        self.netg.load_weights(modelDir)
+        pecg = dataProc.Pecg(groups=len(pecgDirList), length=length, height=self.rawSize[0], width=self.rawSize[1], channels=self.channels)
+        pecg.set2dData(pecgDirList)
+        pecg.twoD = dataProc.scale(pecg.twoD, self.dataRange[:2])
+        pecg.setRnnData(self.temporalDepth)
+        vmem = dataProc.Vmem(groups=len(pecgDirList), length=length, height=self.rawSize[0], width=self.rawSize[1], channels=self.channels)
+        vmem.setRnnData(self.temporalDepth)
+        scaledPng = np.zeros((self.rawSize + (self.channels,)), dtype=dataProc.DATA_TYPE)
+        for i in range(0, vmem.groups):
+            # predict, then save .npy and .png files
+            vmem.rnn[i] = self.netg.predict(pecg.rnn[i], batch_size=self.batchSize, verbose=1)
+            npyDir = ''.join([dstDir, pecgDirList[i][-23:-6], '/npy/']) # create a folder for every sequence
+            pngDir = ''.join([dstDir, pecgDirList[i][-23:-6], '/png/'])
+            if not os.path.exists(npyDir):
+                os.makedirs(npyDir)
+            if not os.path.exists(pngDir):
+                os.makedirs(pngDir)
+            for j in range (0, vmem.rnn.shape[1]):
+                #resizedPng = cv.resize(vmem.rnn[i, j], self.rawSize)
+                scaledPng = 255*vmem.rnn[i,j]
+                cv.imwrite(pngDir+'%06d.png'%j, scaledPng)
+            vmem.rnn[i] = dataProc.scale(vmem.rnn[i], dataProc.NORM_RANGE, self.dataRange[2:])
+            for j in range (0, vmem.rnn.shape[1]):
+                #resizedMem = cv.resize(vmem.rnn[i, j], self.rawSize)
+                np.save(npyDir+'%06d.npy'%j, vmem.rnn[i, j])
+        # calculate MAE
+        trueVmem = dataProc.Vmem(groups=len(pecgDirList), length=length, height=self.rawSize[0], width=self.rawSize[1], channels=self.channels)
+        trueVmem.set2dData(trueVmemDirList)
+        trueVmem.setRnnData(self.temporalDepth)
+        mae,stdError = calculateMae(vmem.rnn, trueVmem.rnn)
+        print('mae is %f, std_error is %f'%(mae, stdError))
+
 
 # ((number of training samples*validation split ratio)/batch size) should be an integer
-def trainGan(pecgDirList, memDirList, modelDir, rawSize=(200, 200), imgSize=(256, 256), channels=1, netGName='uNet', netDName='VGG16', activationG='relu', lossFuncG='mae',
+'''
+def trainGan(pecgDirList, memDirList, modelDir, rawSize=(200, 200), imgSize=(256, 256), channels=1, netgName='uNet', netDName='VGG16', activationG='relu', lossFuncG='mae',
 temporalDepth=None, gKernels=64, gKernelSize=None, dKernels=64, dKernelSize=None, gradientPenaltyWeight=10, lossDWeight=0.01, learningRateG=1e-4, learningRateD=1e-4,
 trainingRatio=5, epochsNum=100, earlyStoppingPatience=10, batchSize=10, valSplit=0.2, continueTrain=False, pretrainedGPath=None, pretrainedDPath=None, beta1=0.5, beta2=0.9):
 
-    gan = Gan(imgSize[0], imgSize[1], channels, netDName, netGName, temporalDepth, gKernels, dKernels, gKernelSize, activationG, lossFuncG, gradientPenaltyWeight,
+    gan = Gan(imgSize[0], imgSize[1], channels, netDName, netgName, temporalDepth, gKernels, dKernels, gKernelSize, activationG, lossFuncG, gradientPenaltyWeight,
     lossDWeight, learningRateG, learningRateD, beta1, beta2, batchSize)
-    pecg, mem = dataProc.mergeSequence(pecgDirList, memDirList, temporalDepth, netGName, rawSize, imgSize, dataProc.NORM_RANGE)
+    pecg, mem, dataRange = dataProc.mergeSequence(pecgDirList, memDirList, temporalDepth, netgName, rawSize, imgSize, dataProc.NORM_RANGE)
     #delete some data here to match the batch size
     print('traing data loaded')
 
@@ -55,11 +126,11 @@ trainingRatio=5, epochsNum=100, earlyStoppingPatience=10, batchSize=10, valSplit
     labelFake = -np.ones((gan.batchSize), dtype=np.float32)
     dummyMem = np.zeros((gan.batchSize), dtype=np.float32)
     earlyStoppingCounter = 0
+    [pEcgTrain, pEcgVal, memTrain, memVal] = dataProc.splitTrainAndVal(pecg, mem, valSplit)
     print('begin to train GAN')
 
     for currentEpoch in range(0, epochsNum):
         beginingTime = datetime.datetime.now()
-        [pEcgTrain, pEcgVal, memTrain, memVal] = dataProc.splitTrainAndVal(pecg, mem, valSplit)
         for currentBatch in range(0, trainingDataLength, gan.batchSize):
             pEcgLocal = pEcgTrain[currentBatch:currentBatch+gan.batchSize, :]
             memLocal = memTrain[currentBatch:currentBatch+gan.batchSize, :]
@@ -87,23 +158,24 @@ trainingRatio=5, epochsNum=100, earlyStoppingPatience=10, batchSize=10, valSplit
     np.save(modelDir + 'loss', lossRecorder)
     print('training completed')
 
-def prediction(pecgDirList, dstDirList, modelDir, priorEcgRange, priorMemRange, rawSize=(200, 200), imgSize=(256, 256), channels=1, netGName='uNet',
+
+def prediction(pecgDirList, dstDirList, modelDir, priorEcgRange, priorMemRange, rawSize=(200, 200), imgSize=(256, 256), channels=1, netgName='uNet',
 activationG='relu', lossFuncG='mae', temporalDepth=None, gKernels=64, gKernelSize=3, batchSize=10):
-    network = Networks(imgRows=imgSize[0], imgCols=imgSize[1], channels=channels, gKernels=gKernels, gKernelSize=gKernelSize, temporalDepth=temporalDepth)
-    if netGName == 'uNet':
+    network = Networks(imgSize=imgSize, channels=channels, gKernels=gKernels, gKernelSize=gKernelSize, temporalDepth=temporalDepth)
+    if netgName == 'uNet':
         netG = network.uNet()
-    elif netGName == 'convLstm':
+    elif netgName == 'convLstm':
         netG = network.convLstm()
-    elif netGName == 'uNet3d':
+    elif netgName == 'uNet3d':
         netG = network.uNet3d()
     netG.load_weights(modelDir)
     length = len(pecgDirList)
     for i in range(0, length):
         rawEcg = dataProc.loadData(srcDir=pecgDirList[i], resize=True, dstSize=imgSize)
-        if netGName == 'uNet':
+        if netgName == 'uNet':
             ecg = rawEcg
         else:
-            ecg = dataProc.create3dEcg(rawEcg, temporalDepth, netGName)
+            ecg = dataProc.create3dEcg(rawEcg, temporalDepth, netgName)
         ecg = dataProc.scale(ecg, priorEcgRange, dataProc.NORM_RANGE)
         mem = netG.predict(ecg, batch_size=batchSize, verbose=1)
         pngMem = mem*255
@@ -122,6 +194,7 @@ activationG='relu', lossFuncG='mae', temporalDepth=None, gKernels=64, gKernelSiz
             np.save(npyDir+'%06d.npy'%i, resizedMem)
             resizedPng = cv.resize(pngMem[i], rawSize)
             cv.imwrite(pngDir+'%06d.png'%i, resizedPng)
+'''
 
 def displayLoss(lossD, lossA, lossVal, beginingTime, epoch):
     lossValStr = ' - lossVal: ' + '%.6f'%lossVal[0]
