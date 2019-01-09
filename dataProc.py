@@ -107,19 +107,35 @@ class Data(object):
         self.height = height
         self.width = width
         self.range = [np.amin(self.twoD), np.amax(self.twoD)]
+        self.train = None
+        self.val = None
     
     def set2dData(self, dirList):
         # load and normalize
         for i in range(0, len(dirList)):
             self.twoD[i, :, :, :, :] = loadData(dirList[i])
 
+    def save2dData(self, pathPrefix, vname):
+        # vname: phie, vmem, pecg ...
+        for i in range(0, self.groups):
+            path = os.path.join(pathPrefix, '%06d'%i, vname)
+            if os.path.exists(path):
+                os.makedirs(path)
+            for j in range(0, self.length):
+                np.save(os.path.join(path, '%06d'%j), self.twoD[i, j, :, :, :])
+
     def normalize(self, normalizationRange=NORM_RANGE):
         self.twoD, minValue, maxValue = normalize(self.twoD, normalizationRange=normalizationRange)
         self.range = [minValue, maxValue]
 
+    def splitTrainAndVal(self, valSplit):
+        trainingLength = math.floor(self.groups*valSplit)
+        self.train = self.twoD[0:trainingLength]
+        self.val = self.twoD[trainingLength:]
+
 class Phie(Data):
-    def __init__(self, coordinates, **dataArgs):
-        super(Phie, self).__init__(**dataArgs)
+    def __init__(self, coordinates, *args, **kwargs):
+        super(Phie, self).__init__(*args, **kwargs)
         self.train = None
         self.val = None
         self.coordinates = coordinates
@@ -127,10 +143,14 @@ class Phie(Data):
 
     def setGround(self, index): # set reference point (ground, phie=0)
         self.ground = index
-        np.subtract(self.twoD, self.twoD[:, :, self.coordinates[self.ground, 0], self.coordinates[self.ground, 1], :], out=self.twoD)
+        #np.subtract(self.twoD, self.twoD[:, :, self.coordinates[self.ground, 0], self.coordinates[self.ground, 1], :], out=self.twoD)
+        # Why above line doesn't work?
+        for i, sequence in enumerate(self.twoD):
+            for j, frame in enumerate(sequence):
+                np.subtract(frame, frame[self.coordinates[self.ground, 0], self.coordinates[self.ground, 1], :], out=self.twoD[i, j, :, :, :])
 
     def downSample(self):
-        sampled = np.squeeze(self.twoD[:, :, self.coordinates[:, 0], self.coordinates[:, 1], :], 4)
+        sampled = np.squeeze(self.twoD[:, :, self.coordinates[:, 0], self.coordinates[:, 1], :], 3)
 
         firstRowIndex = np.linspace(0, self.height, num=self.height, endpoint=False, dtype=DATA_TYPE)
         firstColIndex = np.linspace(0, self.width, num=self.width, endpoint=False, dtype=DATA_TYPE)
@@ -139,16 +159,14 @@ class Phie(Data):
 
         for i, sequence in enumerate(self.twoD):
             for j, frame in enumerate(sequence):
-                self.twoD[i, j, :, :, :]=scipy.interpolate.griddata(self.coordinates, sampled[i, j], grid, method='nearest')
+                self.twoD[i, j, :, :, 0]=scipy.interpolate.griddata(self.coordinates, sampled[i, j], grid, method='nearest')
 
-class Pecg(Data):
-    def __init__(self, **dataArgs):
-        super(Pecg, self).__init__(**dataArgs)
+
+class Pecg(Phie):
+    def __init__(self, *args, **kwargs):
+        super(Pecg, self).__init__(*args, **kwargs)
         #self.items = self.groups*self.length
         self.rnn = None
-        self.train = None
-        self.val = None
-        self.coordinates = None
     
     def setRnnData(self, temporalDepth):
         validLength = self.length - temporalDepth + 1
@@ -157,17 +175,35 @@ class Pecg(Data):
         self.rnn = np.lib.stride_tricks.as_strided(self.twoD, shape=shape, strides=strides, writeable=False) # (groups, validLength, temporalDepth, height, width, channels)
         #self.items = shape[0]*shape[1]
 
-    def splitTrainAndVal(self, valSplit):
-        trainingLength = math.floor(self.groups*valSplit)
-        self.train = self.rnn[0:trainingLength]
-        self.val = self.rnn[trainingLength:]
-
-class Vmem(Pecg):
-    def __init__(self, **pecgArgs):
-        super(Vmem, self).__init__(**pecgArgs)
+class Vmem(Data):
+    def __init__(self, *args, **kwargs):
+        super(Vmem, self).__init__(*args, **kwargs)
+        self.rnn = None
 
     def setRnnData(self, temporalDepth):
         self.rnn = self.twoD[:, temporalDepth-1:, :, :, :] # (groups, validLength, height, width, channels)
+
+def selectData(length, size, nameList, srcPathPrefix, dstPathPrefix):
+    i = 0
+    dstPath = os.path.join(dstPathPrefix, '%d_%d_%d'%(size[0], size[1], length))
+    for name in nameList:
+        srcPhie = loadData(os.path.join(srcPathPrefix, name, 'phie_'))
+        srcVmem = loadData(os.path.join(srcPathPrefix, name, 'vmem_'))
+        for j in range(0, srcPhie.shape[0], length):
+            for x in range(size[0], srcPhie.shape[1]):
+                for y in range(size[1], srcPhie.shape[2]):
+                    dstPhiePath = os.path.join(dstPath, ''.join(['%06d_'%i, name]), 'phie')
+                    dstVmemPath = os.path.join(dstPath, ''.join(['%06d_'%i, name]), 'vmem')
+                    if not os.path.exists(dstPhiePath):
+                        os.makedirs(dstPhiePath)
+                    if not os.path.exists(dstVmemPath):
+                        os.makedirs(dstVmemPath)
+                    x0 = x-size[0]
+                    y0 = y-size[1]
+                    for k in range(0, length):
+                        np.save(os.path.join(dstPhiePath, '%06d.npy'%k), srcPhie[j+k, x0:x, y0:y])
+                        np.save(os.path.join(dstVmemPath, '%06d.npy'%k), srcVmem[j+k, x0:x, y0:y])
+                    i += 1
 
 def shuffleData(ecg, vmem):
     # shuffle on the dim of groups
