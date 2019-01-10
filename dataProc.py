@@ -140,6 +140,7 @@ class Phie(Data):
         self.val = None
         self.coordinates = coordinates
         self.ground = None
+        self.rnn = None
 
     def setGround(self, index): # set reference point (ground, phie=0)
         self.ground = index
@@ -161,19 +162,15 @@ class Phie(Data):
             for j, frame in enumerate(sequence):
                 self.twoD[i, j, :, :, 0]=scipy.interpolate.griddata(self.coordinates, sampled[i, j], grid, method='nearest')
 
-
-class Pecg(Phie):
-    def __init__(self, *args, **kwargs):
-        super(Pecg, self).__init__(*args, **kwargs)
-        #self.items = self.groups*self.length
-        self.rnn = None
-    
     def setRnnData(self, temporalDepth):
         validLength = self.length - temporalDepth + 1
         shape = ((self.groups, validLength, temporalDepth) + self.twoD.shape[2:])
         strides = (self.twoD.strides[0:2] + (self.twoD.strides[1],) + self.twoD.strides[2:]) # Expand dim_of_length to dim_of_length * dim_of_temporalDepth
         self.rnn = np.lib.stride_tricks.as_strided(self.twoD, shape=shape, strides=strides, writeable=False) # (groups, validLength, temporalDepth, height, width, channels)
-        #self.items = shape[0]*shape[1]
+
+class Pecg(Phie):
+    def __init__(self, *args, **kwargs):
+        super(Pecg, self).__init__(*args, **kwargs)
 
 class Vmem(Data):
     def __init__(self, *args, **kwargs):
@@ -189,9 +186,9 @@ def selectData(length, size, nameList, srcPathPrefix, dstPathPrefix):
     for name in nameList:
         srcPhie = loadData(os.path.join(srcPathPrefix, name, 'phie_'))
         srcVmem = loadData(os.path.join(srcPathPrefix, name, 'vmem_'))
-        for j in range(0, srcPhie.shape[0], length):
-            for x in range(size[0], srcPhie.shape[1]):
-                for y in range(size[1], srcPhie.shape[2]):
+        for j in range(length, srcPhie.shape[0], length):
+            for x in range(size[0], srcPhie.shape[1], size[0]):
+                for y in range(size[1], srcPhie.shape[2], size[1]):
                     dstPhiePath = os.path.join(dstPath, ''.join(['%06d_'%i, name]), 'phie')
                     dstVmemPath = os.path.join(dstPath, ''.join(['%06d_'%i, name]), 'vmem')
                     if not os.path.exists(dstPhiePath):
@@ -200,9 +197,9 @@ def selectData(length, size, nameList, srcPathPrefix, dstPathPrefix):
                         os.makedirs(dstVmemPath)
                     x0 = x-size[0]
                     y0 = y-size[1]
-                    for k in range(0, length):
-                        np.save(os.path.join(dstPhiePath, '%06d.npy'%k), srcPhie[j+k, x0:x, y0:y])
-                        np.save(os.path.join(dstVmemPath, '%06d.npy'%k), srcVmem[j+k, x0:x, y0:y])
+                    for k in range(1, length+1):
+                        np.save(os.path.join(dstPhiePath, '%06d.npy'%(length-k)), srcPhie[j-k, x0:x, y0:y])
+                        np.save(os.path.join(dstVmemPath, '%06d.npy'%(length-k)), srcVmem[j-k, x0:x, y0:y])
                     i += 1
 
 def shuffleData(ecg, vmem):
