@@ -23,7 +23,7 @@ from keras.utils import to_categorical
 import dataProc
 
 class Networks(object):
-    def __init__(self, imgSize=(256, 256), channels=1, gKernels=64, dKernels=64, gKernelSize=3, temporalDepth=None, activationG=None, **kwargs):
+    def __init__(self, imgSize=(256, 256), channels=1, gKernels=64, dKernels=64, gKernelSize=3, temporalDepth=None, activationG=None):
         self.imgSize = imgSize
         self.imgRows = imgSize[0]
         self.imgCols = imgSize[1]
@@ -199,7 +199,60 @@ class Networks(object):
         decoder11 = Conv2D(1, kernel_size=(1, 1), activation=self.activationG, padding='valid', kernel_initializer='he_normal')(squeezed10)
         model = Model(inputs=inputs, outputs=decoder11, name='uNet3d')
         return model
-    
+
+    def uNet3d5(self):
+        inputs = Input((self.temporalDepth, self.imgRows, self.imgCols, self.channels)) # 32x32
+
+        encoder1 = Conv3D(self.gKernels, self.gKernelSize, strides=2, padding='same', kernel_initializer='he_normal')(inputs)
+        encoder1 = LeakyReLU(alpha=0.2, name='encoder1')(encoder1) # 16x16
+
+        encoder2 = Conv3D(self.gKernels*2, self.gKernelSize, strides=2, padding='same', kernel_initializer='he_normal')(encoder1)
+        encoder2 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder2)
+        encoder2 = LeakyReLU(alpha=0.2, name='encoder2')(encoder2) # 8x8
+
+        encoder3 = Conv3D(self.gKernels*4, self.gKernelSize, strides=2, padding='same', kernel_initializer='he_normal')(encoder2)
+        encoder3 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder3)
+        encoder3 = LeakyReLU(alpha=0.2, name='encoder3')(encoder3) # 4x4
+
+        encoder4 = Conv3D(self.gKernels*8, self.gKernelSize, strides=2, padding='same', kernel_initializer='he_normal')(encoder3)
+        encoder4 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder4)
+        encoder4 = LeakyReLU(alpha=0.2, name='encoder4')(encoder4) # 2x2
+
+        encoder5 = Conv3D(self.gKernels*8, self.gKernelSize, strides=2, padding='same', kernel_initializer='he_normal')(encoder4)
+        encoder5 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder5)
+        encoder5 = LeakyReLU(alpha=0.2, name='encoder5')(encoder5) # 1x1
+
+        decoder1 = Conv3D(self.gKernels*8, 1, activation='relu', padding='valid', kernel_initializer='he_normal')(encoder5)
+        decoder1 = UpSampling3D(size=2, name='decoder1')(decoder1) # 2x2
+        decoder1 = Dropout(0.5)(decoder1)
+        connection1 = Concatenate(axis=-1, name='connection1')([decoder1, encoder4])
+
+        decoder2 = Conv3D(self.gKernels*8, self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(connection1)
+        decoder2 = UpSampling3D(size=2, name='decoder2')(decoder2) # 4x4
+        decoder2 = Dropout(0.5)(decoder2)
+        connection2 = Concatenate(axis=-1, name='connection2')([decoder2, encoder3])
+
+        decoder3 = Conv3D(self.gKernels*4, self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(connection2)
+        decoder3 = UpSampling3D(size=2, name='decoder3')(decoder3) # 8x8
+        decoder3 = Dropout(0.5)(decoder3)
+        connection3 = Concatenate(axis=-1, name='connection3')([decoder3, encoder2])
+
+        decoder4 = Conv3D(self.gKernels*2, self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(connection3)
+        decoder4 = UpSampling3D(size=2, name='decoder4')(decoder4) # 16x16
+        #decoder4 = Dropout(0.5)(decoder4)
+        connection4 = Concatenate(axis=-1, name='connection4')([decoder4, encoder1])
+
+        decoder5 = Conv3D(self.gKernels, self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(connection4)
+        decoder5 = UpSampling3D(size=2, name='decoder5')(decoder5) # 32x32
+        #decoder5 = Dropout(0.5)(decoder5)
+
+        decoder6 = Conv3D(int(self.gKernels/2), self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(decoder5)
+        decoder6 = Conv3D(int(self.gKernels/4), self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(decoder6)
+        decoder6 = Conv3D(1, self.gKernelSize, activation=self.activationG, padding='same', kernel_initializer='he_normal')(decoder6)
+
+        model = Model(inputs=inputs, outputs=decoder6, name='uNet3d5')
+        return model
+
     def convLstm(self):
         inputs = Input((self.temporalDepth, self.imgRows, self.imgCols, self.channels)) # 256x256
 
@@ -488,7 +541,7 @@ class Gan(object):
         self.learningRateD = learningRateD
         self.activationG = activationG
         self.batchSize = batchSize
-        self.network = Networks(imgRows=self.imgRows, imgCols=self.imgCols, channels=self.channels, gKernels=gKernels, dKernels=dKernels, gKernelSize=gKernelSize,
+        self.network = Networks(imgSize=(self.imgRows, self.imgCols), channels=self.channels, gKernels=gKernels, dKernels=dKernels, gKernelSize=gKernelSize,
         temporalDepth=self.temporalDepth,activationG=self.activationG)
         if self.netDName == 'straight3':
             self.netD = self.network.straight3()

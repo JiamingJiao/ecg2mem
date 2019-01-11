@@ -41,14 +41,15 @@ class Generator(Networks):
         self.checkpointer = ModelCheckpoint(modelDir+'netg.h5', monitor='val_mean_absolute_error', verbose=1, save_best_only=True, save_weights_only=True, mode='min')
         self.earlyStopping = EarlyStopping(patience=earlyStoppingPatience*5, verbose=1)
         self.learningRate = ReduceLROnPlateau('val_mean_absolute_error', 0.1, earlyStoppingPatience, 1, 'auto', 1e-4, min_lr=learningRateG*1e-4)
-        self.pecg = dataProc.Pecg(groups=len(pecgDirList), length=length, height=self.rawSize[0], width=self.rawSize[1], channels=self.channels)
-        self.vmem = dataProc.Vmem(groups=len(vmemDirList), length=length, height=self.rawSize[0], width=self.rawSize[1], channels=self.channels)
+        self.pecg = dataProc.Phie(None, len(pecgDirList), length, self.rawSize[0], self.rawSize[1], self.channels)
+        self.vmem = dataProc.Vmem(len(vmemDirList), length, self.rawSize[0], self.rawSize[1], self.channels)
         self.pecg.set2dData(pecgDirList)
         self.vmem.set2dData(vmemDirList)
         self.pecg.normalize()
         self.vmem.normalize()
         self.dataRange = self.pecg.range + self.vmem.range
         print(self.dataRange)
+        np.save(os.path.join(modelDir, 'data_range'), np.array(self.dataRange))
         dataProc.shuffleData(self.pecg.twoD, self.vmem.twoD)
         trainingFunc = {'convLstm': self.trainConvLstm, 'convLstm5': self.trainConvLstm, 'seqConv5': self.trainSeqConv5}
         trainingFunc[self.netg.name]()
@@ -56,8 +57,8 @@ class Generator(Networks):
     def trainConvLstm(self):
         self.pecg.setRnnData(self.temporalDepth)
         self.vmem.setRnnData(self.temporalDepth)
-        self.pecg.splitTrainAndVal(self.valSplit)
-        self.vmem.splitTrainAndVal(self.valSplit)
+        self.pecg.splitTrainAndVal(self.valSplit, srcType='rnn')
+        self.vmem.splitTrainAndVal(self.valSplit, srcType='rnn')
         trainGenerator = dataProc.generatorRnn(self.pecg.train, self.vmem.train, self.batchSize)
         valGenerator = dataProc.generatorRnn(self.pecg.val, self.vmem.val, self.batchSize)
         self.history = self.netg.fit_generator(trainGenerator, epochs=self.epochsNum, verbose=2, callbacks=[self.checkpointer, self.learningRate, self.earlyStopping],
