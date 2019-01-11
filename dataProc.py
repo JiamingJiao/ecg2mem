@@ -109,6 +109,7 @@ class Data(object):
         self.range = [np.amin(self.twoD), np.amax(self.twoD)]
         self.train = None
         self.val = None
+        self.rnn = None
     
     def set2dData(self, dirList):
         # load and normalize
@@ -119,7 +120,7 @@ class Data(object):
         # vname: phie, vmem, pecg ...
         for i in range(0, self.groups):
             path = os.path.join(pathPrefix, '%06d'%i, vname)
-            if os.path.exists(path):
+            if not os.path.exists(path):
                 os.makedirs(path)
             for j in range(0, self.length):
                 np.save(os.path.join(path, '%06d'%j), self.twoD[i, j, :, :, :])
@@ -128,10 +129,14 @@ class Data(object):
         self.twoD, minValue, maxValue = normalize(self.twoD, normalizationRange=normalizationRange)
         self.range = [minValue, maxValue]
 
-    def splitTrainAndVal(self, valSplit):
+    def splitTrainAndVal(self, valSplit, srcType):
         trainingLength = math.floor(self.groups*valSplit)
-        self.train = self.twoD[0:trainingLength]
-        self.val = self.twoD[trainingLength:]
+        if srcType == 'rnn':
+            self.train = self.rnn[0:trainingLength]
+            self.val = self.rnn[trainingLength:]
+        else:
+            self.train = self.twoD[0:trainingLength]
+            self.val = self.twoD[trainingLength:]
 
 class Phie(Data):
     def __init__(self, coordinates, *args, **kwargs):
@@ -276,7 +281,10 @@ def npyToPng(srcDir, dstDir):
     print('convert .npy to .png completed')
 
 def loadData(srcDir, resize=False, dstSize=(256, 256), withChannel=True): # doesn't work with multi-channel image
-    srcPathList = sorted(glob.glob(srcDir + '*.npy'))
+    if srcDir[-1] == '/':
+        srcPathList = sorted(glob.glob(srcDir + '*.npy'))
+    else:
+        srcPathList = sorted(glob.glob(srcDir + '/*.npy'))
     length = len(srcPathList)
     sample = np.load(srcPathList[0])
     src = np.ndarray(sample.shape, dtype=DATA_TYPE)
