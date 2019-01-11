@@ -51,7 +51,12 @@ class Generator(Networks):
         print(self.dataRange)
         np.save(os.path.join(modelDir, 'data_range'), np.array(self.dataRange))
         dataProc.shuffleData(self.pecg.twoD, self.vmem.twoD)
-        trainingFunc = {'convLstm': self.trainConvLstm, 'convLstm5': self.trainConvLstm, 'seqConv5': self.trainSeqConv5}
+        trainingFunc = {
+            'convLstm': self.trainConvLstm,
+            'convLstm5': self.trainConvLstm,
+            'seqConv5': self.trainSeqConv5,
+            'uNet3d': self.trainUNet3d,
+            'uNet3d5': self.trainUNet3d}
         trainingFunc[self.netg.name]()
         
     def trainConvLstm(self):
@@ -65,6 +70,10 @@ class Generator(Networks):
         validation_data=valGenerator, use_multiprocessing=True)
 
     def trainSeqConv5(self):
+        self.history = self.netg.fit(x=self.pecg.twoD, y=self.vmem.twoD, batch_size=self.batchSize, epochs=self.epochsNum, verbose=2,
+        callbacks=[self.checkpointer, self.learningRate, self.earlyStopping], validation_split=self.valSplit, shuffle=True)
+
+    def trainUNet3d(self):
         self.history = self.netg.fit(x=self.pecg.twoD, y=self.vmem.twoD, batch_size=self.batchSize, epochs=self.epochsNum, verbose=2,
         callbacks=[self.checkpointer, self.learningRate, self.earlyStopping], validation_split=self.valSplit, shuffle=True)
 
