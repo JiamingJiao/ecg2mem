@@ -124,7 +124,7 @@ class Data(object):
                 os.makedirs(path)
             for j in range(0, self.length):
                 np.save(os.path.join(path, '%06d'%j), self.twoD[i, j, :, :, :])
-
+                
     def normalize(self, normalizationRange=NORM_RANGE):
         self.twoD, minValue, maxValue = normalize(self.twoD, normalizationRange=normalizationRange)
         self.range = [minValue, maxValue]

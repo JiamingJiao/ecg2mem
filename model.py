@@ -463,7 +463,7 @@ class Networks(object):
 
         #decoder6 = Bidirectional(ConvLSTM2D(self.gKernels, self.gKernelSize, padding='same', activation='relu', kernel_initializer='he_normal', return_sequences=True))(decoder5)
         decoder6 = ConvLSTM2D(self.gKernels, self.gKernelSize, padding='same', activation='relu', kernel_initializer='he_normal', return_sequences=True,
-        recurrent_dropout=0.8)(decoder5)
+        recurrent_dropout=0.5, recurrent_regularizer=keras.regularizers.l1(0.01))(decoder5)
         #outputs of two directions are concatenated
         #decoder6 = TimeDistributed(Conv2D(int(self.gKernels/2), self.gKernelSize, padding='same', activation='relu', kernel_initializer='he_normal'))(decoder6)
         decoder6 = TimeDistributed(Conv2D(int(self.gKernels/4), self.gKernelSize, padding='same', activation='relu', kernel_initializer='he_normal'))(decoder6)
