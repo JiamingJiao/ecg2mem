@@ -13,8 +13,12 @@ from analysis import calculateMae
 class Generator(Networks):
     def __init__(self, netgName, rawSize=(200, 200), batchSize=10, **networksArgs):
         super(Generator, self).__init__(**networksArgs)
-        getModel = {'uNet': self.uNet, 'convLstm': self.convLstm, 'uNet3d': self.uNet3d, 'convLstm5': self.convLstm5,
-        'seqConv5': self.seqConv5}
+        getModel = {'uNet': self.uNet,
+            'convLstm': self.convLstm,
+            'uNet3d': self.uNet3d,
+            'convLstm5': self.convLstm5,
+            'seqConv5': self.seqConv5,
+            'uNet3d5': self.uNet3d5}
         self.netg = getModel[netgName]()
         self.netg.summary()
         self.rawSize = rawSize
@@ -29,8 +33,10 @@ class Generator(Networks):
         self.epochsNum = None
         self.valSplit = None
 
-    def train(self, pecgDirList, vmemDirList, length=200, learningRateG=1e-4, lossFunc='mae', continueTrain=False, pretrainedModelPath=None,
+    def train(self, pecg, vmem, length=200, learningRateG=1e-4, lossFunc='mae', continueTrain=False, pretrainedModelPath=None,
     modelDir=None, earlyStoppingPatience=10, epochsNum=200, valSplit=0.2):
+        self.pecg = pecg
+        self.vmem = vmem
         self.epochsNum = epochsNum
         self.valSplit = valSplit
         self.netg.compile(optimizer=Adam(lr=learningRateG), loss=lossFunc, metrics=[lossFunc])
@@ -41,10 +47,10 @@ class Generator(Networks):
         self.checkpointer = ModelCheckpoint(modelDir+'netg.h5', monitor='val_mean_absolute_error', verbose=1, save_best_only=True, save_weights_only=True, mode='min')
         self.earlyStopping = EarlyStopping(patience=earlyStoppingPatience*5, verbose=1)
         self.learningRate = ReduceLROnPlateau('val_mean_absolute_error', 0.1, earlyStoppingPatience, 1, 'auto', 1e-4, min_lr=learningRateG*1e-4)
-        self.pecg = dataProc.Phie(None, len(pecgDirList), length, self.rawSize[0], self.rawSize[1], self.channels)
-        self.vmem = dataProc.Vmem(len(vmemDirList), length, self.rawSize[0], self.rawSize[1], self.channels)
-        self.pecg.set2dData(pecgDirList)
-        self.vmem.set2dData(vmemDirList)
+        #self.pecg = dataProc.Phie(None, len(pecgDirList), length, self.rawSize[0], self.rawSize[1], self.channels)
+        #self.vmem = dataProc.Vmem(len(vmemDirList), length, self.rawSize[0], self.rawSize[1], self.channels)
+        #self.pecg.setData2(pecgDirList)
+        #self.vmem.setData2(vmemDirList)
         self.pecg.normalize()
         self.vmem.normalize()
         self.dataRange = self.pecg.range + self.vmem.range
@@ -80,7 +86,7 @@ class Generator(Networks):
     def predict(self, pecgDirList, dstDir, trueVmemDirList, modelDir, length=200, batchSize=10):
         self.netg.load_weights(modelDir)
         pecg = dataProc.Pecg(groups=len(pecgDirList), length=length, height=self.rawSize[0], width=self.rawSize[1], channels=self.channels)
-        pecg.set2dData(pecgDirList)
+        pecg.setData(pecgDirList)
         pecg.twoD = dataProc.scale(pecg.twoD, self.dataRange[:2])
         pecg.setRnnData(self.temporalDepth)
         vmem = dataProc.Vmem(groups=len(pecgDirList), length=length, height=self.rawSize[0], width=self.rawSize[1], channels=self.channels)
@@ -105,7 +111,7 @@ class Generator(Networks):
                 np.save(npyDir+'%06d.npy'%j, vmem.rnn[i, j])
         # calculate MAE
         trueVmem = dataProc.Vmem(groups=len(pecgDirList), length=length, height=self.rawSize[0], width=self.rawSize[1], channels=self.channels)
-        trueVmem.set2dData(trueVmemDirList)
+        trueVmem.setData(trueVmemDirList)
         trueVmem.setRnnData(self.temporalDepth)
         mae,stdError = calculateMae(vmem.rnn, trueVmem.rnn)
         print('mae is %f, std_error is %f'%(mae, stdError))
