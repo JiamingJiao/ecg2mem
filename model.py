@@ -219,7 +219,7 @@ class Networks(object):
         encoder4 = LeakyReLU(alpha=0.2, name='encoder4')(encoder4) # 2x2
 
         encoder5 = Conv3D(self.gKernels*8, self.gKernelSize, strides=2, padding='same', kernel_initializer='he_normal')(encoder4)
-        encoder5 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder5)
+        #encoder5 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder5)
         encoder5 = LeakyReLU(alpha=0.2, name='encoder5')(encoder5) # 1x1
 
         decoder1 = Conv3D(self.gKernels*8, 1, activation='relu', padding='valid', kernel_initializer='he_normal')(encoder5)

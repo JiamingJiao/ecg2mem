@@ -111,12 +111,16 @@ class Data(object):
         self.val = None
         self.rnn = None
     
-    def set2dData(self, dirList):
+    def setData(self, dirList):
         # load and normalize
         for i in range(0, len(dirList)):
             self.twoD[i, :, :, :, :] = loadData(dirList[i])
 
-    def save2dData(self, pathPrefix, vname):
+    def setData2(self, pathList):
+        for i, path in enumerate(pathList):
+            self.twoD[i, :, :, :, :] = np.load(path)
+
+    def saveData(self, pathPrefix, vname):
         # vname: phie, vmem, pecg ...
         for i in range(0, self.groups):
             path = os.path.join(pathPrefix, '%06d'%i, vname)
@@ -207,6 +211,41 @@ def selectData(length, size, nameList, srcPathPrefix, dstPathPrefix):
                         np.save(os.path.join(dstVmemPath, '%06d.npy'%(length-k)), srcVmem[j-k, x0:x, y0:y])
                     i += 1
 
+def selectData2(size, nameList, srcPathPrefix, dstPathPrefix):
+    i = 0
+    dstPhiePath = os.path.join(dstPathPrefix, '%d_%d'%size, 'phie')
+    dstVmemPath = os.path.join(dstPathPrefix, '%d_%d'%size, 'vmem')
+    if not os.path.exists(dstPhiePath):
+        os.makedirs(dstPhiePath)
+    if not os.path.exists(dstVmemPath):
+        os.makedirs(dstVmemPath)
+    for name in nameList:
+        srcPhie = loadData(os.path.join(srcPathPrefix, name, 'phie_'))
+        srcVmem = loadData(os.path.join(srcPathPrefix, name, 'vmem_'))
+        for x in range(size[0], srcPhie.shape[1], size[0]):
+            for y in range(size[1], srcPhie.shape[2], size[1]):
+                np.save(os.path.join(dstPhiePath, ''.join(['%06d_'%i, name])), srcPhie[:, x-size[0]:x, y-size[1]:y])
+                np.save(os.path.join(dstVmemPath, ''.join(['%06d_'%i, name])), srcVmem[:, x-size[0]:x, y-size[1]:y])
+                i += 1
+
+def selectData3(length, srcPathPrefix, dstPathPrefix):
+    dstPhiePath = os.path.join(dstPathPrefix, 'phie')
+    dstVmemPath = os.path.join(dstPathPrefix, 'vmem')
+    if not os.path.exists(dstPhiePath):
+        os.makedirs(dstPhiePath)
+    if not os.path.exists(dstVmemPath):
+        os.makedirs(dstVmemPath)
+    srcPhiePathList = sorted(glob.glob(os.path.join(srcPathPrefix, 'phie', '*.npy')))
+    srcVmemPathList = sorted(glob.glob(os.path.join(srcPathPrefix, 'vmem', '*.npy')))
+    i = 0
+    for j in range(0, len(srcPhiePathList)):
+        srcPhie = np.load(srcPhiePathList[j])
+        srcVmem = np.load(srcVmemPathList[j])
+        for k in range(length, srcPhie.shape[0], length):
+            np.save(os.path.join(dstPhiePath, '%06d'%i), srcPhie[k-length:k])
+            np.save(os.path.join(dstVmemPath, '%06d'%i), srcVmem[k-length:k])
+            i += 1
+
 def shuffleData(ecg, vmem):
     # shuffle on the dim of groups
     state = np.random.get_state()
@@ -281,9 +320,8 @@ def npyToPng(srcDir, dstDir):
     print('convert .npy to .png completed')
 
 def loadData(srcDir, resize=False, dstSize=(256, 256), withChannel=True): # doesn't work with multi-channel image
-    if srcDir[-1] == '/':
-        srcPathList = sorted(glob.glob(srcDir + '*.npy'))
-    else:
+    srcPathList = sorted(glob.glob(srcDir + '*.npy'))
+    if len(srcPathList)==0:
         srcPathList = sorted(glob.glob(srcDir + '/*.npy'))
     length = len(srcPathList)
     sample = np.load(srcPathList[0])
