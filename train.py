@@ -33,7 +33,10 @@ class Generator(Networks):
         self.epochsNum = None
         self.valSplit = None
 
-    def train(self, pecg, vmem, length=200, learningRateG=1e-4, lossFunc='mae', continueTrain=False, pretrainedModelPath=None,
+        self.prediction = None
+        self.truth = None
+
+    def train(self, pecg, vmem, learningRateG=1e-4, lossFunc='mae', continueTrain=False, pretrainedModelPath=None,
     modelDir=None, earlyStoppingPatience=10, epochsNum=200, valSplit=0.2):
         self.pecg = pecg
         self.vmem = vmem
@@ -83,39 +86,37 @@ class Generator(Networks):
         self.history = self.netg.fit(x=self.pecg.twoD, y=self.vmem.twoD, batch_size=self.batchSize, epochs=self.epochsNum, verbose=2,
         callbacks=[self.checkpointer, self.learningRate, self.earlyStopping], validation_split=self.valSplit, shuffle=True)
 
-    def predict(self, pecgDirList, dstDir, trueVmemDirList, modelDir, length=200, batchSize=10):
+    def predict(self, pecg, dstDir, trueVmem, modelDir, batchSize=16):
         self.netg.load_weights(modelDir)
-        pecg = dataProc.Pecg(groups=len(pecgDirList), length=length, height=self.rawSize[0], width=self.rawSize[1], channels=self.channels)
-        pecg.setData(pecgDirList)
-        pecg.twoD = dataProc.scale(pecg.twoD, self.dataRange[:2])
-        pecg.setRnnData(self.temporalDepth)
-        vmem = dataProc.Vmem(groups=len(pecgDirList), length=length, height=self.rawSize[0], width=self.rawSize[1], channels=self.channels)
-        vmem.setRnnData(self.temporalDepth)
-        scaledPng = np.zeros((self.rawSize + (self.channels,)), dtype=dataProc.DATA_TYPE)
-        for i in range(0, vmem.groups):
-            # predict, then save .npy and .png files
-            vmem.rnn[i] = self.netg.predict(pecg.rnn[i], batch_size=self.batchSize, verbose=1)
-            npyDir = ''.join([dstDir, pecgDirList[i][-23:-6], '/npy/']) # create a folder for every sequence
-            pngDir = ''.join([dstDir, pecgDirList[i][-23:-6], '/png/'])
-            if not os.path.exists(npyDir):
-                os.makedirs(npyDir)
-            if not os.path.exists(pngDir):
-                os.makedirs(pngDir)
-            for j in range (0, vmem.rnn.shape[1]):
-                #resizedPng = cv.resize(vmem.rnn[i, j], self.rawSize)
-                scaledPng = 255*vmem.rnn[i,j]
-                cv.imwrite(pngDir+'%06d.png'%j, scaledPng)
-            vmem.rnn[i] = dataProc.scale(vmem.rnn[i], dataProc.NORM_RANGE, self.dataRange[2:])
-            for j in range (0, vmem.rnn.shape[1]):
-                #resizedMem = cv.resize(vmem.rnn[i, j], self.rawSize)
-                np.save(npyDir+'%06d.npy'%j, vmem.rnn[i, j])
-        # calculate MAE
-        trueVmem = dataProc.Vmem(groups=len(pecgDirList), length=length, height=self.rawSize[0], width=self.rawSize[1], channels=self.channels)
-        trueVmem.setData(trueVmemDirList)
-        trueVmem.setRnnData(self.temporalDepth)
-        mae,stdError = calculateMae(vmem.rnn, trueVmem.rnn)
+        self.pecg = pecg
+        self.pecg.twoD = dataProc.scale(self.pecg.twoD, self.dataRange[:2])
+        predictionFunc = {
+            'convLstm':self.predictConvLstm,
+            'convLstm5': self.predictConvLstm,
+            'uNet3d': self.predictUNet3d,
+            'uNet3d5': self.predictUNet3d
+        }
+        predictionFunc[self.netg.name](trueVmem)
+        self.prediction.twoD = dataProc.scale(self.prediction.twoD, (0, 1), dstRange=self.dataRange[2:])
+        self.prediction.saveData2(dstDir, 'vmem')
+        mae,stdError = calculateMae(self.prediction.twoD, self.truth.twoD)
         print('mae is %f, std_error is %f'%(mae, stdError))
 
+    def predictConvLstm(self, trueVmem):
+        self.pecg.setRnnData(self.temporalDepth)
+        # Empty array to store results
+        self.prediction = dataProc.Data(self.pecg.groups, self.pecg.length-self.temporalDepth+1, self.pecg.height, self.pecg.width, self.pecg.channels)
+        self.truth = dataProc.Data(*self.prediction.twoD.shape)
+        for i in range(0, self.pecg.groups):
+            self.prediction.twoD[i] = self.netg.predict(self.pecg.rnn[i], batch_size=self.batchSize, verbose=1)
+        trueVmem.setRnnData(self.temporalDepth)
+        self.truth.twoD = trueVmem.rnn
+
+    def predictUNet3d(self, trueVmem):
+        self.prediction = dataProc.Data(*self.pecg.twoD.shape)
+        self.prediction.twoD = self.netg.predict(self.pecg.twoD, batch_size=self.batchSize, verbose=1)
+        self.truth = dataProc.Data(*self.prediction.twoD.shape)
+        self.truth.twoD = trueVmem.twoD
 
 # ((number of training samples*validation split ratio)/batch size) should be an integer
 '''
