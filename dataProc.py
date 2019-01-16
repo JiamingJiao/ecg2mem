@@ -106,6 +106,7 @@ class Data(object):
         self.length = length
         self.height = height
         self.width = width
+        self.channels = channels
         self.range = [np.amin(self.twoD), np.amax(self.twoD)]
         self.train = None
         self.val = None
@@ -128,6 +129,13 @@ class Data(object):
                 os.makedirs(path)
             for j in range(0, self.length):
                 np.save(os.path.join(path, '%06d'%j), self.twoD[i, j, :, :, :])
+
+    def saveData2(self, pathPrefix, vname):
+        path = os.path.join(pathPrefix, vname)
+        if not os.path.exists(path):
+            os.makedirs(path)
+        for i, data in enumerate(self.twoD):
+            np.save(os.path.join(path, '%06d'%i), data)
                 
     def normalize(self, normalizationRange=NORM_RANGE):
         self.twoD, minValue, maxValue = normalize(self.twoD, normalizationRange=normalizationRange)
