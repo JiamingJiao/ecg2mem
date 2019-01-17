@@ -150,6 +150,16 @@ class Data(object):
             self.train = self.twoD[0:trainingLength]
             self.val = self.twoD[trainingLength:]
 
+    def saveImage(self, pathPrefix):
+        data, _, _ = normalize(self.twoD, normalizationRange=(0, 255))
+        data = data.astype(np.uint8)
+        for i, group in enumerate(data):
+            path = os.path.join(pathPrefix, '%06d'%i)
+            if not os.path.exists(path):
+                os.makedirs(path)
+            for j, img in enumerate(group):
+                cv.imwrite(os.path.join(path, '%06d.png'%j), img)
+
 class Phie(Data):
     def __init__(self, coordinates, *args, **kwargs):
         super(Phie, self).__init__(*args, **kwargs)
