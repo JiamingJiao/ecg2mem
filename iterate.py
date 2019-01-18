@@ -32,7 +32,8 @@ def searchElectrodes(argsPath='./iterationArgs.json'):
     vmemList = readDataList(args["vmemList"])
     vmemTraining = dataProc.Vmem(*trainingDataSize)
     vmemTraining.setData2(vmemList[0:trainingDataSize[0]])
-    vmemSelection = dataProc.Vmem(*trainingDataSize)
+    vmemSelection = dataProc.Vmem(*selectionDataSize)
+    vmemSelection.setData2(vmemList[trainingDataSize[0]:])
 
     # compile model
     generator = train.Generator(**args["netg"])
@@ -54,11 +55,13 @@ def searchElectrodes(argsPath='./iterationArgs.json'):
 
     # start iteration
     schedule = np.array(args["schedule"], np.uint8)
-    for [electrodesNum, iterationsNum] in schedule[0]:
+    for [electrodesNum, iterationsNum] in schedule:
         bestMae = float('inf')
         for i in range(iterationsNum):
-            print('\n %delectrodes %diter \n'%(electrodesNum, i))
+            print('\n %delectrodes %diter'%(electrodesNum, i))
             subFolder = os.path.join(args["tempDir"], '%delectrodes_%diter'%(electrodesNum, i))
+            if not os.path.exists(subFolder):
+                os.makedirs(subFolder)
 
             np.random.shuffle(parentElectrodes)
             currentElectrodes = parentElectrodes[0: electrodesNum]
@@ -66,7 +69,7 @@ def searchElectrodes(argsPath='./iterationArgs.json'):
             _ = analysis.drawElectrodes(currentElectrodes, dstPath=os.path.join(subFolder, 'coordinates.png'))
 
             tempPhie = preprocessPhie(phieTraining, currentElectrodes)
-            tempVmem = copy.deepcopy(vmemSelection)
+            tempVmem = copy.deepcopy(vmemTraining)
             generator.train(tempPhie, tempVmem, **args["train"], constantLearningRate=True, modelDir=subFolder, continueTrain=True, pretrainedModelPath=parentModelPath)
 
             tempPhie = preprocessPhie(phieSlection, currentElectrodes)
@@ -75,6 +78,7 @@ def searchElectrodes(argsPath='./iterationArgs.json'):
             np.save(os.path.join(subFolder, 'test_loss'), np.array([mae, stdErr]))
 
             if mae < bestMae:
+                print('\n MAE reduced from %f to %f'%(bestMae, mae))
                 bestMae = mae
                 bestElectrodes = currentElectrodes
                 bestModelPath = os.path.join(subFolder, 'netg.h5')
