@@ -1,118 +1,109 @@
 import os
 import shutil
-import glob
+import distutils.dir_util
 import json
-import sys
 import numpy as np
+import csv
+import copy
 
 import dataProc
 import train
 import analysis
 
-ZERO = 1e-4
-
-def iterate(argsFilename='./iterationArgs.json'):
-    with open(argsFilename) as argsFile:
+def searchElectrodes(argsPath='./iterationArgs.json'):
+    with open(argsPath) as argsFile:
         args = json.load(argsFile)
-    simulationDir = args["simulationDir"]
-    trainingDataList = args["training"]["nameList"]
-    predictionDataList = args["prediction"]["nameList"]    
-    dataList = trainingDataList + predictionDataList
-    trainingDataNum = len(trainingDataList)
-    predictionDataNum = len(predictionDataList)
-    tempDir = args["tempDir"]
-    if os.path.exists(tempDir):
-        shutil.rmtree(tempDir)
-    # Copy data to a temp folder in working directory
-    srcPhieDirList = dataProc.createDirList(simulationDir, dataList, 'phie_')
-    srcTrueVmemDirList = dataProc.createDirList(simulationDir, dataList, 'vmem_')
-    phieDirList = dataProc.createDirList(tempDir+'phie/', dataList)
-    trueVmemDirList = dataProc.createDirList(tempDir+'true_vmem/', dataList)
-    vmemDirList = dataProc.createDirList(tempDir+'vmem/', predictionDataList)
-    for i in range(0, len(dataList)):
-        phieDir = phieDirList[i]
-        os.makedirs(phieDir)
-        srcPhieFiles = sorted(glob.glob(srcPhieDirList[i]+'*.npy'))
-        vmemDir = trueVmemDirList[i]
-        os.makedirs(vmemDir)
-        srcVmemFiles = sorted(glob.glob(srcTrueVmemDirList[i]+'*.npy'))
-        for j in range(0, len(srcPhieFiles)):
-            shutil.copy(srcPhieFiles[j], phieDir)
-            shutil.copy(srcVmemFiles[j], vmemDir)
-    print('phie and vmem copied')
-    # Loop of reducing electrodes
-    electrodesDir = args["electrodes"]["dir"]
-    parentElectrodes = np.load(electrodesDir+args["electrodes"]["initial"])
-    i = 0
-    stepSize = 0
-    mapSize = args["mapSize"]
-    fullSize = args["electrodes"]["fullSize"]
-    pecgDirList = dataProc.createDirList(tempDir+'pecg/', trainingDataList)
-    generator = train.Generator(**args["generatorArgs"])
-    notFirstIteration = False
-    parentModelPath = None
-    # Load true vmem for evaluation
-    trueVmem = np.empty((predictionDataNum), object)
-    for i in range(0, predictionDataNum):
-        trueVmem[i] = dataProc.loadData(trueVmemDirList[trainingDataNum+i])
-    trueVmem = np.concatenate(trueVmem)
-    threshold = args["iteration"]["maeThreshold"]
-    condition = True
-    i = 0
-    bestMae = np.inf
-    while condition:
-        electrodesNum = parentElectrodes.shape[0]-stepSize
-        if notFirstIteration:
-            siblings = args["iteration"]["siblings"]
-        else:
-            siblings = 1
-        for j in range(0, siblings):
-            electrodesPath = electrodesDir + args["experimentName"] + '_%d_%d.npy'%(i, electrodesNum)
-            ecg = dataProc.AccurateSparsePecg(mapSize, stepSize, fullSize, parentElectrodes, electrodesPath)
-            disablePrint()
-            print('Messages from method: AccurateSparsePecg.resizeAndCalc are muted!')
-            ecg.resizeAndCalc(phieDirList, pecgDirList)
-            enablePrint()
-            del ecg
-            modelPath = args["training"]["modelDir"] + args["experimentName"] + '/' + '%d_%d_'%(i, electrodesNum)
-            dataRange, history = generator.train(pecgDirList[:trainingDataNum], trueVmemDirList[:trainingDataNum], notFirstIteration, parentModelPath, modelPath, 
-            **args["trainArgs"])
-            notFirstIteration = True
-            #prediction and evaluation
-            vmem = generator.predict(pecgDirList[trainingDataNum:], vmemDirList, modelPath, dataRange[0:2], dataRange[2:4], args["net"]["batchSize"])
-            vmem = np.concatenate(vmem)
-            mae = analysis.calculateMae(vmem, trueVmem)
-            if mae< bestMae:
-                bestElectrodesPath = electrodesPath
-                bestModelPath = modelPath
+    argsFile.close()
+    if not os.path.exists(args["dir"]):
+        os.makedirs(args["dir"])
+    with open(os.path.join(args["dir"], 'parameters.json'), 'w') as outFile:
+        json.dump(args, outFile, sort_keys=True, indent=4)
+    # select data for training and selecting electrodes
+    phieList = readDataList(args["phieList"])
+    trainingDataSize = (int(len(phieList)*args["trainingSplit"]),) + tuple(args["sequenceSize"])
+    selectionDataSize = (len(phieList) - trainingDataSize[0],) + tuple(args["sequenceSize"]) # size of data for selecting electrodes
+    # set phie data
+    initialElectrodes = np.load(args["electrodes"]["initial"])
+    phieTraining = dataProc.Phie(initialElectrodes, *trainingDataSize)
+    phieTraining.setData2(phieList[0:trainingDataSize[0]])
+    phieSlection = dataProc.Phie(initialElectrodes, *selectionDataSize)
+    phieSlection.setData2(phieList[trainingDataSize[0]:])
+    # set vmem data
+    vmemList = readDataList(args["vmemList"])
+    vmemTraining = dataProc.Vmem(*trainingDataSize)
+    vmemTraining.setData2(vmemList[0:trainingDataSize[0]])
+    vmemSelection = dataProc.Vmem(*trainingDataSize)
+
+    # compile model
+    generator = train.Generator(**args["netg"])
+
+    # train and predict on data of initial electrodes
+    print('\n initial iteration \n')
+    tempPhie = preprocessPhie(phieTraining, initialElectrodes)
+    tempVmem = copy.deepcopy(vmemTraining)
+    subFolder = os.path.join(args["tempDir"], 'initial')
+    generator.train(tempPhie, tempVmem, **args["train"], constantLearningRate=False, modelDir=subFolder)
+
+    tempPhie = preprocessPhie(phieSlection, initialElectrodes)
+    tempVmem = copy.deepcopy(vmemSelection)
+    mae, stdErr = generator.predict(tempPhie, None, tempVmem, os.path.join(subFolder, 'netg.h5'))
+    np.save(os.path.join(subFolder, 'test_loss'), np.array([mae, stdErr]))
+
+    parentElectrodes = np.copy(initialElectrodes)
+    parentModelPath = os.path.join(subFolder, 'netg.h5')
+
+    # start iteration
+    schedule = np.array(args["schedule"], np.uint8)
+    for [electrodesNum, iterationsNum] in schedule[0]:
+        bestMae = float('inf')
+        for i in range(iterationsNum):
+            print('\n %delectrodes %diter \n'%(electrodesNum, i))
+            subFolder = os.path.join(args["tempDir"], '%delectrodes_%diter'%(electrodesNum, i))
+
+            np.random.shuffle(parentElectrodes)
+            currentElectrodes = parentElectrodes[0: electrodesNum]
+            np.save(os.path.join(subFolder, 'coordinates'), currentElectrodes)
+            _ = analysis.drawElectrodes(currentElectrodes, dstPath=os.path.join(subFolder, 'coordinates.png'))
+
+            tempPhie = preprocessPhie(phieTraining, currentElectrodes)
+            tempVmem = copy.deepcopy(vmemSelection)
+            generator.train(tempPhie, tempVmem, **args["train"], constantLearningRate=True, modelDir=subFolder, continueTrain=True, pretrainedModelPath=parentModelPath)
+
+            tempPhie = preprocessPhie(phieSlection, currentElectrodes)
+            tempVmem = copy.deepcopy(vmemSelection)
+            mae, stdErr = generator.predict(tempPhie, None, tempVmem, os.path.join(subFolder, 'netg.h5'))
+            np.save(os.path.join(subFolder, 'test_loss'), np.array([mae, stdErr]))
+
+            if mae < bestMae:
                 bestMae = mae
+                bestElectrodes = currentElectrodes
+                bestModelPath = os.path.join(subFolder, 'netg.h5')
+            elif not args["saveModels"] == 'all':
+                os.remove(os.path.join(subFolder, 'netg.h5'))
+        
+        if args["saveModels"] == 'no':
+            os.remove(parentModelPath)
+
+        parentElectrodes = bestElectrodes
         parentModelPath = bestModelPath
-        # Find next electrodes number
-        parentElectrodes = np.load(bestElectrodesPath)
-        if abs(bestMae-threshold) >= ZERO:
-            if notFirstIteration:
-                slope = (parentMae-bestMae) / (parentElectrodes.shape[0]-electrodesNum)
-                stepSize = (bestMae-threshold) / slope
-            else:
-                if bestMae >= threshold:
-                    print('MAE of initial electrodes is larger than threshold. ')
-                    condition = False
-                stepSize = args["iteration"]["initialStep"]
-            #nextElectrodesNum = parentElectrodes.shape[0]-stepSize
-            parentMae = bestMae
-            i += 1
-        else:
-            condition = False
-        if condition == False:
-            print('Deleting temporal files')
-            shutil.rmtree(tempDir)
-            print('Iteration stopped. ')
 
-def disablePrint():
-    sys.stdout = open(os.devnull, 'w')
+    if args["saveModels"] == 'no':
+        os.remove(parentModelPath)
+    distutils.dir_util.copy_tree(args["tempDir"], args["dir"])
+    shutil.rmtree(args["tempDir"])
 
-def enablePrint():
-    sys.stdout = sys.__stdout__
+def readDataList(path):
+    dst = []
+    with open(path, 'r') as f:
+        reader = csv.reader(f)
+        for row in reader:
+            for col in row:
+                dst.append(col)
+    return dst
 
-if __name__ == '__main__':
-    iterate()
+def preprocessPhie(src, coordinates):
+    dst = copy.deepcopy(src)
+    dst.coordinates = np.copy(coordinates)
+    dst.downSample()
+    dst.setGround(0)
+    return dst
