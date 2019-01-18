@@ -12,7 +12,7 @@ from model import Networks, Gan
 from analysis import calculateMae
 
 class Generator(Networks):
-    def __init__(self, netgName, rawSize=(200, 200), batchSize=10, **networksArgs):
+    def __init__(self, netgName, batchSize=10, **networksArgs):
         super(Generator, self).__init__(**networksArgs)
         getModel = {'uNet': self.uNet,
             'convLstm': self.convLstm,
@@ -22,7 +22,6 @@ class Generator(Networks):
             'uNet3d5': self.uNet3d5}
         self.netg = getModel[netgName]()
         self.netg.summary()
-        self.rawSize = rawSize
         self.batchSize = batchSize
         self.dataRange = [0.0]*4 # minPecg, maxPecg, minVmem, maxVmem
         self.checkpointer = None
@@ -38,18 +37,18 @@ class Generator(Networks):
         self.prediction = None
         self.truth = None
 
-    def train(self, pecg, vmem, learningRateG=1e-4, lossFunc='mae', continueTrain=False, pretrainedModelPath=None,
+    def train(self, pecg, vmem, learningRateG=1e-4, lossFuncG='mae', continueTrain=False, pretrainedModelPath=None,
     modelDir=None, earlyStoppingPatience=10, epochsNum=200, valSplit=0.2, constantLearningRate=False):
         self.pecg = pecg
         self.vmem = vmem
         self.epochsNum = epochsNum
         self.valSplit = valSplit
-        self.netg.compile(optimizer=Adam(lr=learningRateG), loss=lossFunc, metrics=[lossFunc])
+        self.netg.compile(optimizer=Adam(lr=learningRateG), loss=lossFuncG, metrics=[lossFuncG])
         if continueTrain == True:
             self.netg.load_weights(pretrainedModelPath)
         if not os.path.exists(modelDir):
             os.makedirs(modelDir)
-        self.checkpointer = ModelCheckpoint(modelDir+'netg.h5', monitor='val_mean_absolute_error', verbose=1, save_best_only=True, save_weights_only=True, mode='min')
+        self.checkpointer = ModelCheckpoint(os.path.join(modelDir, 'netg.h5'), monitor='val_mean_absolute_error', verbose=1, save_best_only=True, save_weights_only=True, mode='min')
         self.learningRate = ReduceLROnPlateau('val_mean_absolute_error', 0.1, earlyStoppingPatience, 1, 'auto', 1e-4, min_lr=learningRateG*1e-4)
         if constantLearningRate==True:
             self.earlyStopping = EarlyStopping(patience=earlyStoppingPatience, verbose=1)

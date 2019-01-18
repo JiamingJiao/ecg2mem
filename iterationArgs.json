@@ -1,5 +1,5 @@
 {
-    "tempDir": "/temp/",
+    "tempDir": "./temp/",
     "dir": "/mnt/recordings/SimulationResults/mapping/training/checkpoints/20190118_1/",
     "sequenceSize": [192, 32, 32, 1],
     "trainingSplit": 0.875,
@@ -16,14 +16,14 @@
         "netgName": "uNet3d5",
         "activationG": "sigmoid",
         "temporalDepth": 192,
-        "rawSize": [32, 32],
+        "imgSize": [32, 32],
         "gKernels": 32,
         "gKernelSize": 3,
         "batchSize": 4
     },
     "train":
     {
-        "epochsNum": 100,
+        "epochsNum": 200,
         "lossFuncG": "mae",
         "learningRateG": 1e-4,
         "earlyStoppingPatience": 10,
