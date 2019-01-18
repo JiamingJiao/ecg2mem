@@ -150,6 +150,9 @@ class Data(object):
             self.train = self.twoD[0:trainingLength]
             self.val = self.twoD[trainingLength:]
 
+    def rotate(self):
+        pass
+
     def saveImage(self, pathPrefix):
         data, _, _ = normalize(self.twoD, normalizationRange=(0, 255))
         data = data.astype(np.uint8)

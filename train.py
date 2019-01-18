@@ -3,6 +3,7 @@ import cv2 as cv
 import os
 import math
 import datetime
+from copy import deepcopy
 from keras.optimizers import Adam
 from keras.callbacks import ModelCheckpoint, TensorBoard, EarlyStopping, ReduceLROnPlateau
 
@@ -32,12 +33,13 @@ class Generator(Networks):
         self.history = None
         self.epochsNum = None
         self.valSplit = None
+        self.callbacks = None
 
         self.prediction = None
         self.truth = None
 
     def train(self, pecg, vmem, learningRateG=1e-4, lossFunc='mae', continueTrain=False, pretrainedModelPath=None,
-    modelDir=None, earlyStoppingPatience=10, epochsNum=200, valSplit=0.2):
+    modelDir=None, earlyStoppingPatience=10, epochsNum=200, valSplit=0.2, constantLearningRate=False):
         self.pecg = pecg
         self.vmem = vmem
         self.epochsNum = epochsNum
@@ -48,8 +50,13 @@ class Generator(Networks):
         if not os.path.exists(modelDir):
             os.makedirs(modelDir)
         self.checkpointer = ModelCheckpoint(modelDir+'netg.h5', monitor='val_mean_absolute_error', verbose=1, save_best_only=True, save_weights_only=True, mode='min')
-        self.earlyStopping = EarlyStopping(patience=earlyStoppingPatience*5, verbose=1)
         self.learningRate = ReduceLROnPlateau('val_mean_absolute_error', 0.1, earlyStoppingPatience, 1, 'auto', 1e-4, min_lr=learningRateG*1e-4)
+        if constantLearningRate==True:
+            self.earlyStopping = EarlyStopping(patience=earlyStoppingPatience, verbose=1)
+            self.callbacks = [self.checkpointer, self.earlyStopping]
+        else:
+            self.earlyStopping = EarlyStopping(patience=earlyStoppingPatience*5, verbose=1)
+            self.callbacks = [self.checkpointer, self.earlyStopping, self.learningRate]
         #self.pecg = dataProc.Phie(None, len(pecgDirList), length, self.rawSize[0], self.rawSize[1], self.channels)
         #self.vmem = dataProc.Vmem(len(vmemDirList), length, self.rawSize[0], self.rawSize[1], self.channels)
         #self.pecg.setData2(pecgDirList)
@@ -75,16 +82,16 @@ class Generator(Networks):
         self.vmem.splitTrainAndVal(self.valSplit, srcType='rnn')
         trainGenerator = dataProc.generatorRnn(self.pecg.train, self.vmem.train, self.batchSize)
         valGenerator = dataProc.generatorRnn(self.pecg.val, self.vmem.val, self.batchSize)
-        self.history = self.netg.fit_generator(trainGenerator, epochs=self.epochsNum, verbose=2, callbacks=[self.checkpointer, self.learningRate, self.earlyStopping],
+        self.history = self.netg.fit_generator(trainGenerator, epochs=self.epochsNum, verbose=2, callbacks=self.callbacks,
         validation_data=valGenerator, use_multiprocessing=True)
 
     def trainSeqConv5(self):
         self.history = self.netg.fit(x=self.pecg.twoD, y=self.vmem.twoD, batch_size=self.batchSize, epochs=self.epochsNum, verbose=2,
-        callbacks=[self.checkpointer, self.learningRate, self.earlyStopping], validation_split=self.valSplit, shuffle=True)
+        callbacks=self.callbacks, validation_split=self.valSplit, shuffle=True)
 
     def trainUNet3d(self):
         self.history = self.netg.fit(x=self.pecg.twoD, y=self.vmem.twoD, batch_size=self.batchSize, epochs=self.epochsNum, verbose=2,
-        callbacks=[self.checkpointer, self.learningRate, self.earlyStopping], validation_split=self.valSplit, shuffle=True)
+        callbacks=self.callbacks, validation_split=self.valSplit, shuffle=True)
 
     def predict(self, pecg, dstDir, trueVmem, modelDir, batchSize=16):
         self.netg.load_weights(modelDir)
@@ -98,9 +105,11 @@ class Generator(Networks):
         }
         predictionFunc[self.netg.name](trueVmem)
         self.prediction.twoD = dataProc.scale(self.prediction.twoD, (0, 1), dstRange=self.dataRange[2:])
-        self.prediction.saveData2(dstDir, 'vmem')
+        if not dstDir == None:
+            self.prediction.saveData2(dstDir, 'vmem')
         mae,stdError = calculateMae(self.prediction.twoD, self.truth.twoD)
         print('mae is %f, std_error is %f'%(mae, stdError))
+        return mae, stdError
 
     def predictConvLstm(self, trueVmem):
         self.pecg.setRnnData(self.temporalDepth)
