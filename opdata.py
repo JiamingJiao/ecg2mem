@@ -11,10 +11,10 @@ class OpVmem(dataProc.Vmem):
         for i, path in enumerate(pathList):
             self.raw[i, :] = np.fromfile(path, np.uint16)
         self.raw = self.raw.reshape(((len(pathList),) + rawSize + (1,)))
-        self.raw = self.raw[:, roi[0, 0]:roi[1, 0], roi[0, 1]:roi[1, 1]]
+        self.raw = self.raw[:, roi[0][0]:roi[1][0], roi[0][1]:roi[1][1]]
         self.raw = self.raw.astype(np.float64)
 
-        super(OpVmem, self).__init__(*args, **kwargs)
+        super(OpVmem, self).__init__(groups=1, length=len(pathList), **kwargs)
 
     def calcVmem(self):
         # map to [0, 1], different from that in opmap

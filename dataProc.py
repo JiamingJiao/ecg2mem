@@ -477,7 +477,8 @@ def makeVideo(srcDir, dstPath, frameRange=(-1, -1), padding=(0, 0), fps=VIDEO_FP
 def makeVideo2(src, dstPath, padding=(0, 0), fps=VIDEO_FPS, frameSize=IMG_SIZE, isColor=False):
     # data will not be normalized to (0, 255)
     #src = loadData(srcDir)
-    src, _, _ = normalize(src, (0, 255))
+    # src, _, _ = normalize(src, (0, 255))
+    src *= 255
     src = src.astype(np.uint8)
     writer = cv.VideoWriter(filename=dstPath, fourcc=cv.VideoWriter_fourcc(*VIDEO_ENCODER), fps=fps, frameSize=frameSize, isColor=isColor)
     resized = np.zeros((frameSize + (1,)), dtype=np.uint8)
