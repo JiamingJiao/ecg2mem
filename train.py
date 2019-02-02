@@ -15,6 +15,7 @@ class Generator(Networks):
     def __init__(self, netgName, batchSize=10, **networksArgs):
         super(Generator, self).__init__(**networksArgs)
         getModel = {'uNet': self.uNet,
+            'uNet5': self.uNet5,
             'convLstm': self.convLstm,
             'uNet3d': self.uNet3d,
             'convLstm5': self.convLstm5,
@@ -67,6 +68,8 @@ class Generator(Networks):
         np.save(os.path.join(modelDir, 'data_range'), np.array(self.dataRange))
         dataProc.shuffleData(self.pecg.twoD, self.vmem.twoD)
         trainingFunc = {
+            'uNet': self.trainUNet,
+            'uNet5': self.trainUNet,
             'convLstm': self.trainConvLstm,
             'convLstm5': self.trainConvLstm,
             'seqConv5': self.trainSeqConv5,
@@ -74,6 +77,12 @@ class Generator(Networks):
             'uNet3d5': self.trainUNet3d}
         trainingFunc[self.netg.name]()
         
+    def trainUNet(self):
+        x = self.pecg.twoD.reshape((self.pecg.groups*self.pecg.length, self.pecg.height, self.pecg.width, self.pecg.channels))
+        y = self.vmem.twoD.reshape((self.vmem.groups*self.vmem.length, self.vmem.height, self.vmem.width, self.vmem.channels))
+        self.history = self.netg.fit(x=x, y=y, batch_size=self.batchSize, epochs=self.epochsNum, verbose=2,
+        callbacks=self.callbacks, validation_split=self.valSplit, shuffle=True)
+
     def trainConvLstm(self):
         self.pecg.setRnnData(self.temporalDepth)
         self.vmem.setRnnData(self.temporalDepth)
@@ -97,7 +106,8 @@ class Generator(Networks):
         self.pecg = pecg
         self.pecg.twoD = dataProc.scale(self.pecg.twoD, self.dataRange[:2])
         predictionFunc = {
-            'convLstm':self.predictConvLstm,
+            'uNet5': self.predictUNet,
+            'convLstm': self.predictConvLstm,
             'convLstm5': self.predictConvLstm,
             'uNet3d': self.predictUNet3d,
             'uNet3d5': self.predictUNet3d
@@ -124,7 +134,15 @@ class Generator(Networks):
         self.prediction = dataProc.Data(*self.pecg.twoD.shape)
         self.prediction.twoD = self.netg.predict(self.pecg.twoD, batch_size=self.batchSize, verbose=1)
         self.truth = dataProc.Data(*self.prediction.twoD.shape)
-        self.truth.twoD = trueVmem.twoD
+        self.truth = trueVmem
+
+    def predictUNet(self, trueVmem):
+        x = self.pecg.twoD.reshape((self.pecg.groups*self.pecg.length, self.pecg.height, self.pecg.width, self.pecg.channels))
+        y = np.zeros(x.shape, dataProc.DATA_TYPE)
+        y = self.netg.predict(x, batch_size=self.batchSize, verbose=1)
+        self.prediction = dataProc.Data(*self.pecg.twoD.shape)
+        self.prediction.twoD = y.reshape(self.prediction.twoD.shape)
+        self.truth = trueVmem
 
 # ((number of training samples*validation split ratio)/batch size) should be an integer
 '''
