@@ -199,14 +199,14 @@ def drawElectrodes(coordinates, radius=2, thickness=-1, color=RED, mapSize=(191,
 def markPhaseSingularity(src1, src2, dstDir, priorMemRange, truncate=10, dstSize=(200, 200), threshold=0.9, **drawMarkersArgs):
     print(src1.dtype)
     print(src2.dtype)
-    resized1 = np.zeros(((src1.shape[0],) + dstSize + (1,)), dataProc.DATA_TYPE)
-    resized2 = np.zeros(((src2.shape[0],) + dstSize + (1,)), dataProc.DATA_TYPE)
+    resized1 = np.zeros(((src1.shape[0],) + dstSize), dataProc.DATA_TYPE) # no channel dim!
+    resized2 = np.zeros(((src2.shape[0],) + dstSize), dataProc.DATA_TYPE)
     for srcFrame, dstFrame in zip(src1, resized1):
         cv.resize(srcFrame, dstSize, dstFrame, 0, 0, cv.INTER_CUBIC)
     for srcFrame, dstFrame in zip(src2, resized2):
         cv.resize(srcFrame, dstSize, dstFrame, 0, 0, cv.INTER_CUBIC)
     def centersList(data, threshold):
-        phase = Phase(data[:, :, :, 0], threshold=threshold)
+        phase = Phase(data, threshold=threshold)
         phaseVariancePeak = phase.phaseVariancePeak.data[truncate:-truncate]
         length = phaseVariancePeak.shape[0]
         centersList = np.empty((length), dtype=object)
@@ -222,17 +222,16 @@ def markPhaseSingularity(src1, src2, dstDir, priorMemRange, truncate=10, dstSize
     resized1 = dataProc.scale(resized1, priorMemRange, (0, 255))[truncate:-truncate] # Markers are drawn on estimation
     canvas = np.ndarray(resized1.shape+(3,), dtype=np.uint8)
     statistics = np.zeros((5), dtype=np.float32) # mean, standard error, matching points, false postive, false negative
-    # Temporally, save video in the future
     for i in range(0, length):
         distance[i], matching, fp, fn = matchPoints(centersList1[i], centersList2[i])
         canvas[i] = drawMarkers(resized1[i], (matching[0], fp, fn), **drawMarkersArgs)
-        statistics[2] += matching.shape[0]
+        statistics[2] += matching.shape[1]
         statistics[3] += fp.shape[0]
         statistics[4] += fn.shape[0]
     if not dstDir == 'None':
         dataProc.makeVideo2(canvas, dstDir)
     else:
-        print('Video were not saved!')
+        print('Video is not saved!')
     distance = np.concatenate(distance)
     statistics[0] = np.mean(distance)
     statistics[1] = np.std(distance, ddof=1)
