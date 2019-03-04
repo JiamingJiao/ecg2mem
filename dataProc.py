@@ -18,7 +18,7 @@ CV_DATA_TYPE = cv.CV_32F
 INTERPOLATION_METHOD = cv.INTER_NEAREST
 NORM_RANGE = (0, 1)
 VIDEO_ENCODER = 'XVID'
-VIDEO_FPS = 50
+VIDEO_FPS = 20
 IMG_SIZE = (200, 200)
 PSEUDO_ECG_CONV_KERNEL = np.zeros((3, 3, 1), dtype=DATA_TYPE)
 PSEUDO_ECG_CONV_KERNEL[1, :, 0] = 1
@@ -474,18 +474,33 @@ def makeVideo(srcDir, dstPath, frameRange=(-1, -1), padding=(0, 0), fps=VIDEO_FP
         writer.write(paddingArray)
     writer.release
 
-def makeVideo2(src, dstPath, padding=(0, 0), fps=VIDEO_FPS, frameSize=IMG_SIZE, isColor=False):
-    # data will not be normalized to (0, 255)
-    #src = loadData(srcDir)
-    src, _, _ = normalize(src, (0, 255))
-    src = src.astype(np.uint8)
-    writer = cv.VideoWriter(filename=dstPath, fourcc=cv.VideoWriter_fourcc(*VIDEO_ENCODER), fps=fps, frameSize=frameSize, isColor=isColor)
-    resized = np.zeros((frameSize + (1,)), dtype=np.uint8)
+def makeVideo2(src, dstPath, padding=(0, 0), fps=VIDEO_FPS, frameSize=IMG_SIZE):
+    src = np.copy(src)
+    if src.dtype == np.uint8:
+        bgr = src
+    else:
+        bgr = np.empty(src.shape[0:3]+(3,), np.float32)
+        if src.ndim == 3:
+            # no channel dim
+            bgr[:, :, :, :] = src[:, :, :, np.newaxis]
+        elif src.ndim == 4:
+            if src.shape[3] == 1:
+                bgr[:, :, :, :] = src
+            elif src.shape[3]==3:
+                for i, frame in enumerate(src):
+                    cv.cvtColor(frame, cv.COLOR_RGB2BGR, bgr[i])
+            elif src.shape[3]==4:
+                for i, frame in enumerate(src):
+                    cv.cvtColor(frame, cv.COLOR_RGBA2BGR, bgr[i])
+        bgr *= 255
+        bgr = bgr.astype(np.uint8)
+    writer = cv.VideoWriter(filename=dstPath, fourcc=cv.VideoWriter_fourcc(*VIDEO_ENCODER), fps=fps, frameSize=frameSize, isColor=True) # shitty
+    resized = np.zeros((frameSize + (3,)), np.uint8)
     paddingArray = np.zeros_like(resized)
     for i in range(0, padding[0]):
         writer.write(paddingArray)
-    for i in range(0, src.shape[0]):
-        cv.resize(src[i], frameSize, resized, 0, 0, cv.INTER_CUBIC)
+    for frame in bgr:
+        cv.resize(frame, frameSize, resized, 0, 0, cv.INTER_CUBIC)
         writer.write(resized)
     for i in range(0, padding[1]):
         writer.write(paddingArray)

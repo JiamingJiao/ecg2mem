@@ -146,16 +146,15 @@ class IntermediateLayers(model.Networks):
             layerNum += 1
 
 class MemStream(opmap.videoData.VideoData):
-    def __init__(self, srcDir, threshold, **videoDataArgs):
-        tempData = dataProc.loadData(srcDir, withChannel=False)
-        super(MemStream, self).__init__(length=tempData.shape[0], height=tempData.shape[1], width=tempData.shape[2], **videoDataArgs)
+    def __init__(self, data, threshold, **videoDataArgs):
+        super(MemStream, self).__init__(length=data.shape[0], height=data.shape[1], width=data.shape[2], **videoDataArgs)
         #fileList = sorted(glob.glob(srcDir+'mem/*.npy'))
         self.camp = 'grey'
-        self.data = tempData
+        self.data = data
 
 class Phase(object):
-    def __init__(self, srcDir, threshold=0.8):
-        self.mem = MemStream(srcDir=srcDir, threshold=threshold)
+    def __init__(self, data, threshold=0.8):
+        self.mem = MemStream(data=data, threshold=threshold)
         self.phase = opmap.phaseMap.PhaseMap(self.mem, width=self.mem.data.shape[1])
         self.phaseVariance = opmap.phaseVarianceMap.PhaseVarianceMap(self.phase)
         self.phaseVariancePeak = opmap.PhaseVariancePeakMap.PhaseVariancePeakMap(self.phaseVariance, threshold=threshold)
@@ -197,10 +196,17 @@ def drawElectrodes(coordinates, radius=2, thickness=-1, color=RED, mapSize=(191,
         cv.imwrite(dstPath, dst)
     return dst
 
-def markPhaseSingularity(srcDir1, srcDir2, dstDir, priorMemRange, truncate=10, **drawMarkersArgs):
-    
-    def centersList(srcDir):
-        phase = Phase(srcDir)
+def markPhaseSingularity(src1, src2, dstDir, priorMemRange, truncate=10, dstSize=(200, 200), threshold=0.9, **drawMarkersArgs):
+    print(src1.dtype)
+    print(src2.dtype)
+    resized1 = np.zeros(((src1.shape[0],) + dstSize), dataProc.DATA_TYPE) # no channel dim!
+    resized2 = np.zeros(((src2.shape[0],) + dstSize), dataProc.DATA_TYPE)
+    for srcFrame, dstFrame in zip(src1, resized1):
+        cv.resize(srcFrame, dstSize, dstFrame, 0, 0, cv.INTER_CUBIC)
+    for srcFrame, dstFrame in zip(src2, resized2):
+        cv.resize(srcFrame, dstSize, dstFrame, 0, 0, cv.INTER_CUBIC)
+    def centersList(data, threshold):
+        phase = Phase(data, threshold=threshold)
         phaseVariancePeak = phase.phaseVariancePeak.data[truncate:-truncate]
         length = phaseVariancePeak.shape[0]
         centersList = np.empty((length), dtype=object)
@@ -208,29 +214,24 @@ def markPhaseSingularity(srcDir1, srcDir2, dstDir, priorMemRange, truncate=10, *
             centersList[i] = centers(phaseVariancePeak[i])
         return centersList
     
-    centersList1 = centersList(srcDir1)
-    centersList2 = centersList(srcDir2)
+    centersList1 = centersList(resized1, threshold)
+    centersList2 = centersList(resized2, threshold)
     length = centersList1.shape[0]
     distance = np.empty((length), dtype=object)
-    background = dataProc.loadData(srcDir1, withChannel=False)[truncate:-truncate] # Markers are drawn on estimation
-    background = dataProc.scale(background, priorMemRange, (0, 255))
-    canvas = np.ndarray(background.shape+(3,), dtype=np.uint8)
+    #background = dataProc.loadData(srcDir1, withChannel=False)[truncate:-truncate] # Markers are drawn on estimation
+    resized1 = dataProc.scale(resized1, priorMemRange, (0, 255))[truncate:-truncate] # Markers are drawn on estimation
+    canvas = np.ndarray(resized1.shape+(3,), dtype=np.uint8)
     statistics = np.zeros((5), dtype=np.float32) # mean, standard error, matching points, false postive, false negative
-    # Temporally, save video in the future
-    if not os.path.exists(dstDir):
-        os.makedirs(dstDir)
     for i in range(0, length):
         distance[i], matching, fp, fn = matchPoints(centersList1[i], centersList2[i])
-        canvas[i] = drawMarkers(background[i], (matching[0], fp, fn), **drawMarkersArgs)
-        statistics[2] += matching.shape[0]
+        canvas[i] = drawMarkers(resized1[i], (matching[0], fp, fn), **drawMarkersArgs)
+        statistics[2] += matching.shape[1]
         statistics[3] += fp.shape[0]
         statistics[4] += fn.shape[0]
     if not dstDir == 'None':
-         for i in range(0, length):
-             # Temporally, save video in the future
-            cv.imwrite(dstDir+'%06d.png'%i, canvas[i])
+        dataProc.makeVideo2(canvas, dstDir)
     else:
-        print('Images were not saved!')
+        print('Video is not saved!')
     distance = np.concatenate(distance)
     statistics[0] = np.mean(distance)
     statistics[1] = np.std(distance, ddof=1)
