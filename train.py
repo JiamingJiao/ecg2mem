@@ -8,6 +8,7 @@ from keras.optimizers import Adam
 from keras.callbacks import ModelCheckpoint, TensorBoard, EarlyStopping, ReduceLROnPlateau
 
 import dataProc
+import utils
 from model import Networks, Gan
 from analysis import calculateMae
 
@@ -88,8 +89,8 @@ class Generator(Networks):
         self.vmem.setRnnData(self.temporalDepth)
         self.pecg.splitTrainAndVal(self.valSplit, srcType='rnn')
         self.vmem.splitTrainAndVal(self.valSplit, srcType='rnn')
-        trainGenerator = dataProc.generatorRnn(self.pecg.train, self.vmem.train, self.batchSize)
-        valGenerator = dataProc.generatorRnn(self.pecg.val, self.vmem.val, self.batchSize)
+        trainGenerator = utils.generatorRnn(self.pecg.train, self.vmem.train, self.batchSize)
+        valGenerator = utils.generatorRnn(self.pecg.val, self.vmem.val, self.batchSize)
         self.history = self.netg.fit_generator(trainGenerator, epochs=self.epochsNum, verbose=2, callbacks=self.callbacks,
         validation_data=valGenerator, use_multiprocessing=True)
 
