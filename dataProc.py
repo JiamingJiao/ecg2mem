@@ -423,8 +423,9 @@ def normalize(src, normalizationRange=NORM_RANGE):
     maxValue = np.amax(src)
     np.add(src, -minValue, src)
     factor = (normalizationRange[1]-normalizationRange[0]) / (maxValue-minValue)
-    np.multiply(src, factor, src)
-    return [src, minValue, maxValue]
+    dst = np.empty_like(src)
+    np.multiply(src, factor, dst)
+    return [dst, minValue, maxValue]
 
 def scale(src, priorRange=None, dstRange=(0, 1)):
     dst = dstRange[0] + ((src-priorRange[0])*(dstRange[1]-dstRange[0])) / (priorRange[1]-priorRange[0])
