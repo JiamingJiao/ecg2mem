@@ -421,10 +421,10 @@ def copyData(srcPath, dstPath, startNum=0, endNum=None, shiftNum=0):
 def normalize(src, normalizationRange=NORM_RANGE):
     minValue = np.amin(src)
     maxValue = np.amax(src)
-    np.add(src, -minValue, src)
-    factor = (normalizationRange[1]-normalizationRange[0]) / (maxValue-minValue)
     dst = np.empty_like(src)
-    np.multiply(src, factor, dst)
+    np.add(src, -minValue, dst)
+    factor = (normalizationRange[1]-normalizationRange[0]) / (maxValue-minValue)
+    np.multiply(dst, factor, dst)
     return [dst, minValue, maxValue]
 
 def scale(src, priorRange=None, dstRange=(0, 1)):
