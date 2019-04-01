@@ -36,6 +36,8 @@ class SparsePecg(object):
         colIndex, rowIndex = np.meshgrid(firstRowIndex, firstColIndex)
         self.grid = (rowIndex, colIndex)
         self.distance = np.ndarray(((coordinates.shape[0],) + shape), dtype=DATA_TYPE)
+        dArray = np.zeros(shape, dtype=DATA_TYPE)
+        dArray[:, :] = d
         for i in range(0, coordinates.shape[0]):
             cv.magnitude((rowIndex - coordinates[i, 0]), (colIndex - coordinates[i, 1]), self.distance[i])
             cv.magnitude(self.distance[i], d, self.distance[i])
@@ -71,13 +73,13 @@ class SparsePecg(object):
             print('%s completed'%dstDirList[i])
 
 class AccurateSparsePecg(SparsePecg):
-    def __init__(self, srcShape, removeNum, fullCoordinatesShape, parentCoordinates, coordinatesDir):
+    def __init__(self, srcShape, removeNum, fullCoordinatesShape, parentCoordinates, coordinatesDir, **kwargs):
         self.srcShape = srcShape
         rowStride = math.floor(srcShape[0]/fullCoordinatesShape[0])
         colStride = math.floor(srcShape[1]/fullCoordinatesShape[1])
         self.multipleOfStride = ((fullCoordinatesShape[0]-1)*rowStride+1, (fullCoordinatesShape[1]-1)*colStride+1)
         coordinates = removePoints(parentCoordinates, removeNum)
-        super(AccurateSparsePecg, self).__init__(self.multipleOfStride, coordinates)
+        super(AccurateSparsePecg, self).__init__(self.multipleOfStride, coordinates, **kwargs)
         if not coordinatesDir == 'None':
             np.save(coordinatesDir, self.coordinates)
         else:
