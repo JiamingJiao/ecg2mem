@@ -35,13 +35,19 @@ def filterEcg(src, sampling_rate, fc_low, order_low, fc_high, order_high, fc_not
     return dst
 
 
-def load(path, start, end, **read_csv_kwargs):
+def loadByTrigger(path, start, end, **read_csv_kwargs):
     file_name = glob.glob(os.path.join(path, '*csv'))[0]
     csv_data = pandas.read_csv(file_name, skiprows=12, header=None, **read_csv_kwargs)
     trigger = np.array(csv_data.iloc[0:-1, 2])
     triggered_idx = np.argmax(trigger<-5)
     dst = -np.array(csv_data.iloc[triggered_idx+start:triggered_idx+end, 3:-1])
     return dst  # (time, channel)
+
+
+def load(path, start, end):
+    csv_data = pandas.read_csv(path, skiprows=12, header=None)
+    dst = -np.array(csv_data.iloc[start: end, 0:25]).astype(np.float32)
+    return dst
 
 
 def makeLowpassFilter(sampling_rate, length, f_cut, order):
