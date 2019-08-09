@@ -9,7 +9,7 @@ import matplotlib.cm
 
 
 class OpVmem(object):
-    def __init__(self, path, rawSize, roi, sampling_rate=1000, start=0, end=0, resize=False, dsize=(256, 256), *args, **kwargs):
+    def __init__(self, path, rawSize, roi, sampling_rate=1000, start=0, end=0, resize=False, dsize=(256, 256)):
         pathList = sorted(glob.glob(os.path.join(path, '*.raww')))
         if not end>0:
             end = len(pathList)
