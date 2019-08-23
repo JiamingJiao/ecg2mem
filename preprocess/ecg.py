@@ -44,9 +44,9 @@ def loadByTrigger(path, start, end, **read_csv_kwargs):
     return dst  # (time, channel)
 
 
-def load(path, start, end):
+def load(path, start_time, end_time, start_channel, end_channel):
     csv_data = pandas.read_csv(path, skiprows=12, header=None)
-    dst = -np.array(csv_data.iloc[start: end, 0:25]).astype(np.float32)
+    dst = -np.array(csv_data.iloc[start_time: end_time, start_channel:end_channel]).astype(np.float32)
     return dst
 
 
