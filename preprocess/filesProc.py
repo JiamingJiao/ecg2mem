@@ -71,7 +71,7 @@ def getPecg(src_path, dst_path, elec_pos, gnd_pos, conductance, inter_size):
         np.save(os.path.join(dst_pecg_folder, src_path.split('/')[-1][:-4]), pecg_map)
 
 
-def getPecgWithRandomElec(src_path, dst_path, elec_pos_xy, z_dist_list, elec_pos_num, gnd_pos, conductance, inter_size):
+def getPecgWithRandomElec(src_path, dst_path, elec_pos_xy, z_dist_list, elec_pos_num, gnd_pos, inter_size):
     # elec_pos_num: how many different electrode settings are used on each phie dsequence
     src_path_list = sorted(glob.glob(os.path.join(src_path, '*.npy')))
     dst_pecg_folder = os.path.join(dst_path, 'pecg')
@@ -83,11 +83,11 @@ def getPecgWithRandomElec(src_path, dst_path, elec_pos_xy, z_dist_list, elec_pos
         os.makedirs(dst_pecg_folder)
     for src_path in src_path_list:
         phie = np.load(src_path)
-        pecg_ref = pseudoEcg.calcPecgSequence(phie, gnd_pos, conductance)
+        pecg_ref = pseudoEcg.calcPecgSequence(phie, gnd_pos)
         for i in range(0, elec_pos_num):
             for j in range(0, elec_num):
                 elec_pos_xyz[j, 2] = z_dist_list[np.random.randint(0, max_dist_idx)]
-            pecg_no_ref = pseudoEcg.calcPecgSequence(phie, elec_pos_xyz, conductance)
+            pecg_no_ref = pseudoEcg.calcPecgSequence(phie, elec_pos_xyz)
             pecg = np.subtract(pecg_no_ref, pecg_ref)
             pecg_map = pseudoEcg.interpolate(pecg, elec_pos_xy, inter_size)
             np.save(os.path.join(dst_pecg_folder, ''.join([src_path.split('/')[-1][:-4], '%02d'%i])), pecg_map)
